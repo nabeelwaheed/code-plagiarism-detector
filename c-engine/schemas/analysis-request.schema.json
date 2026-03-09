@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/ccpp-analysis-request.schema.json",
+  "title": "CCPP AnalysisRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "engine_version", "language", "submissions", "params"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "engine_version": { "type": "string", "minLength": 1 },
+    "language": { "type": "string", "enum": ["c", "cpp"] },
+    "submissions": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/SubmissionInput" }
+    },
+    "template": { "$ref": "#/$defs/TemplateInput" },
+    "params": { "$ref": "#/$defs/Params" }
+  },
+  "$defs": {
+    "FileBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_path", "byte_start", "byte_end"],
+      "properties": {
+        "file_path": { "type": "string", "minLength": 1 },
+        "byte_start": { "type": "integer", "minimum": 0 },
+        "byte_end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "SubmissionInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["submission_id", "source"],
+      "properties": {
+        "submission_id": { "type": "string", "minLength": 1 },
+        "source": { "type": "string" },
+        "source_map": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/FileBoundary" }
+        }
+      }
+    },
+    "TemplateInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": { "type": "string" },
+        "source_map": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/FileBoundary" }
+        }
+      }
+    },
+    "Options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ignore_comments": { "type": "boolean", "default": true },
+        "ignore_pp_directives": { "type": "boolean", "default": true },
+        "consistent_identifier_renaming": { "type": "boolean", "const": true, "default": true },
+        "anonymize_literals": { "type": "boolean", "const": true, "default": true }
+      }
+    },
+    "Params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["k_gram", "window", "gst_min_match", "top_k"],
+      "properties": {
+        "k_gram": { "type": "integer", "minimum": 1 },
+        "window": { "type": "integer", "minimum": 1 },
+        "gst_min_match": { "type": "integer", "minimum": 1 },
+        "top_k": { "type": "integer", "minimum": 1 },
+        "threshold_primary": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "options": { "$ref": "#/$defs/Options" }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "engine_version": "0.1.0",
+  "language": "cpp",
+  "submissions": [
+    {
+      "submission_id": "A",
+      "source": "#include <vector>\nint main() { std::vector<int> v = {1,2,3}; return (int)v.size(); }\n"
+    },
+    {
+      "submission_id": "B",
+      "source": "#include <vector>\nint main() { std::vector<int> w = {1,2,3}; return (int)w.size(); }\n"
+    }
+  ],
+  "params": {
+    "k_gram": 5,
+    "window": 4,
+    "gst_min_match": 5,
+    "top_k": 5
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "files": [
+    {
+      "file_path": "main.c",
+      "source": "int main() { return 0; }"
+    },
+    {
+      "file_path": "util.c",
+      "source": "int add(int a, int b) { return a + b; }\n"
+    }
+  ]
+}

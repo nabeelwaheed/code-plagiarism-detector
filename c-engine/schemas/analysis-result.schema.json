@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/schemas/ccpp-analysis-result.schema.json",
+  "title": "CCPP AnalysisResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "engine_version", "language", "params_used", "pairs"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "engine_version": { "type": "string", "minLength": 1 },
+    "language": { "type": "string", "enum": ["c", "cpp"] },
+    "params_used": { "$ref": "#/$defs/ParamsUsed" },
+    "pairs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PairResult" }
+    }
+  },
+  "$defs": {
+    "ParamsUsed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["k_gram", "window", "gst_min_match", "top_k", "options"],
+      "properties": {
+        "k_gram": { "type": "integer", "minimum": 1 },
+        "window": { "type": "integer", "minimum": 1 },
+        "gst_min_match": { "type": "integer", "minimum": 1 },
+        "top_k": { "type": "integer", "minimum": 1 },
+        "threshold_primary": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ignore_comments", "ignore_pp_directives", "consistent_identifier_renaming", "anonymize_literals"],
+          "properties": {
+            "ignore_comments": { "type": "boolean" },
+            "ignore_pp_directives": { "type": "boolean" },
+            "consistent_identifier_renaming": { "type": "boolean" },
+            "anonymize_literals": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "PairResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a_id", "b_id", "score_primary", "score_secondary", "matches"],
+      "properties": {
+        "a_id": { "type": "string", "minLength": 1 },
+        "b_id": { "type": "string", "minLength": 1 },
+        "score_primary": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "score_secondary": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "matches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/MatchSpan" }
+        }
+      }
+    },
+    "MatchSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b"],
+      "properties": {
+        "a": { "$ref": "#/$defs/LocationSpan" },
+        "b": { "$ref": "#/$defs/LocationSpan" }
+      }
+    },
+    "LocationSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byte_start", "byte_end", "line_start", "col_start", "line_end", "col_end"],
+      "properties": {
+        "byte_start": { "type": "integer", "minimum": 0 },
+        "byte_end": { "type": "integer", "minimum": 0 },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "col_start": { "type": "integer", "minimum": 1 },
+        "line_end": { "type": "integer", "minimum": 1 },
+        "col_end": { "type": "integer", "minimum": 1 },
+        "file_path": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

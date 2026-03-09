@@ -1,0 +1,33 @@
+# - package identity
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2021"
+
+# - runtime deps
+# - cli parsing
+# - json io
+# - tree sitter parsers
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tree-sitter = "0.20"
+tree-sitter-c = "0.20"
+tree-sitter-cpp = "0.20"
+
+# - test deps
+# - cli execution
+# - temp files
+# - schema validation
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "=3.10.1"
+serde_json = "1.0"
+jsonschema = { version = "0.17", default-features = false, features = ["draft202012"] }
+time = "=0.3.34"
+# - transitive pins
+# - rust toolchain compatibility
+url = "=2.4.1"
+uuid = "=1.6.1"

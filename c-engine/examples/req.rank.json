@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "engine_version": "0.1.0",
+  "language": "c",
+  "submissions": [
+    {
+      "submission_id": "A",
+      "source": "int add(int a, int b) { return a + b; }\n"
+    },
+    {
+      "submission_id": "B",
+      "source": "int sum(int x, int y) { return x + y; }\n"
+    }
+  ],
+  "params": {
+    "k_gram": 5,
+    "window": 4,
+    "gst_min_match": 5,
+    "top_k": 10,
+    "threshold_primary": 0.1,
+    "options": {
+      "ignore_comments": true,
+      "ignore_pp_directives": true,
+      "consistent_identifier_renaming": true,
+      "anonymize_literals": true
+    }
+  }
+}
