@@ -29,6 +29,10 @@ function StudentAssignmentView() {
     return(
         <div>
             <h1 className="header">Student Assignment View</h1>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <div className="sidebar">
                 <p className={'sidebarTextbox'}>Menu</p>
                 <button type={'button'} onClick={toClass} className={'sidebarButton'}>Back To Course</button>
@@ -44,7 +48,8 @@ function StudentAssignmentView() {
             </div>
             <div className={'testing'}>
                 <h1>Assignment: /assignment name/</h1>
-                <form className={'smallContainer'} onSubmit={submitAssignment} onKeyUp={checkForm} autoComplete="off" noValidate>
+                <form className={'smallContainer'} onSubmit={submitAssignment} onKeyUp={checkForm} autoComplete="off"
+                      noValidate>
                     <input
                         type="file"
                         accept={'.zip'}
@@ -58,20 +63,12 @@ function StudentAssignmentView() {
                         className={'standardButton'}
                         type="submit"
                         id="btn"
-                        >Submit
+                    >Submit
                     </button>
                 </form>
             </div>
         </div>
     );
-}
-/**
- * based on the number of assignments a user has for a class, return their assignments dynamically
- * TODO: get the user's information from the backend
- * @returns {JSX.Element}
- */
-function renderAssignments(){
-
 }
 
 export default StudentAssignmentView

@@ -52,22 +52,31 @@ function InstructorCourseView() {
     }
 
     //TODO: load the correct number of assignments ---------------------------
-    let stuList;
-
+    /**
+     * Loads the required number of courses for a user
+     * @returns {JSX.Element}
+     */
     function render() {
+        const stuList = [];
+
         for (let i = 0; i < numberAssignments; i++) {
             if (i % 2 === 0) {
-                stuList += renderAssignments('R')
+                stuList.push(renderAssignments('R'));
             } else {
-                stuList += renderAssignments('L')
+                stuList.push(renderAssignments('L'));
             }
         }
-        return({stuList})
+
+        return <>{stuList}</>;
     }
 
     return(
         <div>
             <h1 className="header">Instructor Course View</h1>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <div className="sidebar">
                 <p className={'sidebarTextbox'}>Menu</p>
                 <button type={'button'} onClick={goToInstrHome} className={'sidebarButton'}>Back To Homepage</button>
@@ -79,8 +88,7 @@ function InstructorCourseView() {
                 <button type={'button'} onClick={ca} className={'standardButton'}>Create New Assignment</button>
             </div>
             <section className={'studentList'}>
-                {renderAssignments('L')}
-                {renderAssignments('R')}
+                {render()}
             </section>
         </div>
     );

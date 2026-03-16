@@ -45,7 +45,9 @@ function Homepage() {
 
     return (
         <div className={'testing'}>
-            <h1 className="header">Homepage</h1>
+            <section className="header">Homepage</section>
+            <br/>
+            <br/>
             <br/>
             <section className={'smallContainer'}>
                 <section className={'smallContainer'}>

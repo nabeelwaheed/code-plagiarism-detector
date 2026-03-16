@@ -37,6 +37,10 @@ function CreateAssignment() {
     return(
         <div>
             <h1 className="header">Create Assignment</h1>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <section className="sidebar">
                 <p className={'sidebarTextbox'}>Menu</p>
                 <button type={'button'} onClick={goToCourse} className={'sidebarButton'}>Go Back To Course</button>
@@ -50,7 +54,7 @@ function CreateAssignment() {
             <section className={'testing'}>
                 <h1>Create Assignment</h1>
                 <section className={'testing'}>
-                    <form onSubmit={goToAssignment} onKeyUp= {checkForm} autoComplete="off" noValidate>
+                    <form onSubmit={goToAssignment} onKeyUp={checkForm} autoComplete="off" noValidate>
                         <input
                             type="text"
                             name="aName"
@@ -64,13 +68,14 @@ function CreateAssignment() {
                             name="aDescription"
                             placeholder="Description"
                             maxLength={maxDescLength}
-                            />
+                        />
                         <br/>
                         <button
                             className={'standardButton'}
                             type="submit"
                             id="btn"
-                            disabled>Create</button>
+                            disabled>Create
+                        </button>
                     </form>
                 </section>
             </section>

@@ -26,6 +26,10 @@ function CompareSimilarity() {
     return(
         <div className={'testing'}>
             <header className={'header'}>Compare Similarity</header>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <section className={'sidebar'}>
                 <p className={'sidebarTextbox'}>Menu</p>
                 <button type={'button'} onClick={goToAssignment} className={'sidebarButton'}>Back To Assignment</button>
@@ -64,4 +68,5 @@ function CompareSimilarity() {
         </div>
     );
 }
+
 export default CompareSimilarity

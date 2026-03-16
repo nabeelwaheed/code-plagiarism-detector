@@ -42,29 +42,38 @@ function InstructorHomepage() {
     let numberCourses = 4
     let courseName = 'Course'
 
-    //not sure how to actually get this to display
+    //TODO: load the correct number of assignments ---------------------------
+    /**
+     * Loads the required number of assignments for a user
+     * @returns {JSX.Element}
+     */
     function render() {
+        const stuList = [];
+
         for (let i = 0; i < numberCourses; i++) {
-            if (i%2 === 0) {
-                corList += renderCourses('R')
+            if (i % 2 === 0) {
+                stuList.push(renderCourses('R'));
             } else {
-                corList += renderCourses('L')
+                stuList.push(renderCourses('L'));
             }
         }
-        return({corList})
+
+        return <>{stuList}</>;
     }
 
     return(
         <div>
             <h1 className="header">Instructor Homepage for {name}</h1>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <section className="sidebar">
                 <p className={'sidebarTextbox'}>Menu</p>
                 <button onClick={returnHome} type={'button'} className={'sidebarButton'}>Sign Out</button>
             </section>
             <section className={'studentList'}>
-                {renderCourses('L')}
-                {renderCourses('R')}
-                {renderCourses('L')}
+                {render()}
             </section>
         </div>
     );

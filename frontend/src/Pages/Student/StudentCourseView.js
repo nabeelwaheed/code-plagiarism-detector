@@ -16,7 +16,7 @@ function StudentCourseView() {
         nav('/studentHomepage/name');
     }
 
-    const numberAssignments = 20;
+    const numberAssignments = 10;
     let assignmentID = 'a'
 
     /**
@@ -46,33 +46,42 @@ function StudentCourseView() {
         }
     }
 
-    //TODO: load the correct number of assignments ---------------------------
-    let stuList;
-
+    /**
+     * Loads the required number of assignments for a user
+     * @returns {JSX.Element}
+     */
     function render() {
+        const stuList = [];
+
         for (let i = 0; i < numberAssignments; i++) {
             if (i % 2 === 0) {
-                stuList += renderAssignments('R')
+                stuList.push(renderAssignments('R'));
             } else {
-                stuList += renderAssignments('L')
+                stuList.push(renderAssignments('L'));
             }
         }
-        return({stuList})
+
+        return <>{stuList}</>;
     }
+
     return (
         <div>
             <h1 className="header">Student Course View</h1>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <section className="sidebar">
                 <p className={'sidebarTextbox'}>Menu</p>
-                <button type={'button'} onClick={toStudentHomepage} className={'sidebarButton'}>Back To Homepage</button>
+                <button type={'button'} onClick={toStudentHomepage} className={'sidebarButton'}>Back To Homepage
+                </button>
                 <br/>
                 <br/>
                 <button type={'button'} onClick={returnHome} className={'sidebarButton'}>Sign Out</button>
                 <br/>
             </section>
             <section className={'studentList'}>
-                {renderAssignments('L')}
-                {renderAssignments('R')}
+                {render()}
             </section>
         </div>
     );

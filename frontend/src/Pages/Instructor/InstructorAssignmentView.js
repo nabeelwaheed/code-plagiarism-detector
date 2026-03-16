@@ -44,26 +44,36 @@ function InstructorAssignmentView() {
         //pass in a student's data to be displayed
         return (
             <section className={'studentListElement'}>
-                <section className={'flLeft'}>This is the first student</section>
-                <section className={'flRight'}>
-                    <p className={'flLeft'}>Similarity Score: {similarity}%</p>
-                    <button type={'button'} onClick={checkSimilarity} className={'stuButton'} id={'joe'}>Compare</button>
-                </section>
+                <h2>This is the first student</h2>
+                <h2>Similarity Score: {similarity}%</h2>
+                <button type={'button'} onClick={checkSimilarity} className={'stuButton'} id={'joe'}>Compare</button>
+                <br/>
+                <br/>
             </section>
         );
     }
-    //TODO: load the correct number of students ---------------------------
-    let stuList;
+
+    /**
+     *
+     * @returns {JSX.Element}
+     */
     function render() {
+        const stuList = [];
+
         for (let i = 0; i < numberStudents; i++) {
-            stuList += renderAssignments()
+            stuList.push(renderAssignments());
         }
-        return({stuList})
+
+        return <>{stuList}</>;
     }
 
     return(
         <div>
             <header className={'header'}>Instructor Assignment View</header>
+            <br/>
+            <br/>
+            <br/>
+            <br/>
             <section className={'sidebar'}>
                 <p className={'sidebarTextbox'}>Menu</p>
                 <button type={'button'} onClick={goToCourse} className={'sidebarButton'}>Go Back To Course</button>
@@ -74,9 +84,9 @@ function InstructorAssignmentView() {
                 <br/>
                 <button type={'button'} onClick={returnHome} className={'sidebarButton'}>Sign Out</button>
             </section>
+            <h1 className={'testing'}>Student Submissions</h1>
             <section className={'studentList'}>
-                <h1 className={'testing'}>Student Submissions</h1>
-                {renderAssignments()}
+                {render()}
             </section>
         </div>
     );
