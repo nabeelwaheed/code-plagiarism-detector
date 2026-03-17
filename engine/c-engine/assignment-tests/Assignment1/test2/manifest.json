@@ -1,0 +1,26 @@
+{
+  "description": "same temperature-summary logic with renamed identifiers and formatting changes",
+  "assignment": "Assignment1",
+  "case_id": "test2",
+  "language": "c",
+  "mode": "compare",
+  "submissions": [
+    {
+      "id": "A",
+      "upload_kind": "single_file",
+      "source_dir": "submission_a"
+    },
+    {
+      "id": "B",
+      "upload_kind": "single_file",
+      "source_dir": "submission_b"
+    }
+  ],
+  "expected": {
+    "kind": "success",
+    "relation": "high",
+    "score_primary_min": 0.7,
+    "score_secondary_min": 0.35,
+    "match_count_min": 1
+  }
+}

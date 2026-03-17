@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Synthetic Historical-Like C Benchmark Pair",
+  "type": "object",
+  "required": [
+    "pair_id",
+    "assignment_id",
+    "language",
+    "submission_a_archive",
+    "submission_b_archive",
+    "should_flag_for_review",
+    "source_type"
+  ],
+  "properties": {
+    "pair_id": {
+      "type": "string"
+    },
+    "assignment_id": {
+      "type": "string"
+    },
+    "language": {
+      "const": "c"
+    },
+    "submission_a_id": {
+      "type": "string"
+    },
+    "submission_b_id": {
+      "type": "string"
+    },
+    "submission_a_archive": {
+      "type": "string"
+    },
+    "submission_b_archive": {
+      "type": "string"
+    },
+    "template_a_archive": {
+      "type": "string"
+    },
+    "template_b_archive": {
+      "type": "string"
+    },
+    "should_flag_for_review": {
+      "type": "boolean"
+    },
+    "label_meaning": {
+      "type": "string"
+    },
+    "source_type": {
+      "enum": [
+        "synthetic_historical_like",
+        "synthetic",
+        "historical",
+        "public"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

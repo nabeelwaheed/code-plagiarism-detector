@@ -1,0 +1,29 @@
+{
+  "description": "template-heavy roster submissions where shared starter code should be subtracted",
+  "assignment": "Assignment2",
+  "case_id": "test2",
+  "language": "c",
+  "mode": "compare",
+  "submissions": [
+    {
+      "id": "A",
+      "upload_kind": "zip",
+      "source_dir": "submission_a"
+    },
+    {
+      "id": "B",
+      "upload_kind": "zip",
+      "source_dir": "submission_b"
+    }
+  ],
+  "template": {
+    "upload_kind": "zip",
+    "source_dir": "template"
+  },
+  "expected": {
+    "kind": "success",
+    "relation": "mixed-currently",
+    "score_primary_min": 0.65,
+    "score_secondary_max": 0.25
+  }
+}

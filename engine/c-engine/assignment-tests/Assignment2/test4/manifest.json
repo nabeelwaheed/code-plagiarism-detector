@@ -1,0 +1,24 @@
+{
+  "description": "unsafe archive path is rejected before the engine request is built",
+  "assignment": "Assignment2",
+  "case_id": "test4",
+  "language": "c",
+  "mode": "compare",
+  "submissions": [
+    {
+      "id": "A",
+      "upload_kind": "unsafe_zip",
+      "source_dir": "submission_a",
+      "unsafe_archive_path": "../escape.c"
+    },
+    {
+      "id": "B",
+      "upload_kind": "zip",
+      "source_dir": "submission_b"
+    }
+  ],
+  "expected": {
+    "kind": "error",
+    "message_contains": "unsafe archive path"
+  }
+}

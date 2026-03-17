@@ -1,0 +1,14 @@
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\deps\libserde-43b4b04612229b38.rmeta: C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src/lib.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\integer128.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\mod.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\de.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\ser.rs C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\build\serde-e776f346154732a4\out/private.rs
+
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\deps\libserde-43b4b04612229b38.rlib: C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src/lib.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\integer128.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\mod.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\de.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\ser.rs C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\build\serde-e776f346154732a4\out/private.rs
+
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\deps\serde-43b4b04612229b38.d: C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src/lib.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\integer128.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\mod.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\de.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\ser.rs C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\build\serde-e776f346154732a4\out/private.rs
+
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src/lib.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\integer128.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\mod.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\de.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\serde-1.0.228\src\private\ser.rs:
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\build\serde-e776f346154732a4\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\c-engine\\target\\debug\\build\\serde-e776f346154732a4\\out

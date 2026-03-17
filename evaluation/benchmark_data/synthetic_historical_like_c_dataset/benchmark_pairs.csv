@@ -1,0 +1,12 @@
+pair_id,assignment_id,submission_a_id,submission_b_id,should_flag_for_review,notes
+pair_001,assignment_01_threaded_prime_count,sub_0001,sub_0002,true,Same chunking strategy and trial-division prime logic with renamed identifiers and layout changes.
+pair_002,assignment_01_threaded_prime_count,sub_0001,sub_0003,false,"Same assignment, but one uses threaded trial division and the other uses a sieve."
+pair_003,assignment_01_threaded_prime_count,sub_0001,sub_0004,true,Same logic split across two files; multi-file variant closely tracks original structure.
+pair_004,assignment_01_threaded_prime_count,sub_0002,sub_0003,false,Assignment overlap only; different algorithmic core.
+pair_005,assignment_01_threaded_prime_count,sub_0002,sub_0004,true,Likely copied/refactored threaded-trial-division solution.
+pair_006,assignment_02_gradebook_csv,sub_0005,sub_0006,true,Same scanf-based parsing and same arithmetic pattern with cosmetic changes.
+pair_007,assignment_02_gradebook_csv,sub_0005,sub_0007,false,Same task but different parsing approach using fgets/strtok.
+pair_008,assignment_02_gradebook_csv,sub_0005,sub_0008,false,"Shared template and output format, but weighted-average logic differs materially."
+pair_009,assignment_02_gradebook_csv,sub_0006,sub_0007,false,Independent-looking implementations within same assignment.
+pair_010,cross_assignment,sub_0001,sub_0005,false,Different assignments and domains.
+pair_011,cross_assignment,sub_0004,sub_0008,false,Different assignments and domains.

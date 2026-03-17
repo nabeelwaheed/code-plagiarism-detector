@@ -1,0 +1,10 @@
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\deps\libanstyle_wincon-2ba45220fc1eedc7.rmeta: C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src/lib.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\ansi.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\stream.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\windows.rs
+
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\deps\libanstyle_wincon-2ba45220fc1eedc7.rlib: C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src/lib.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\ansi.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\stream.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\windows.rs
+
+C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\c-engine\target\debug\deps\anstyle_wincon-2ba45220fc1eedc7.d: C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src/lib.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\ansi.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\stream.rs C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\windows.rs
+
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src/lib.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\ansi.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\stream.rs:
+C:\Users\tbone\.cargo\registry\src\index.crates.io-6f17d22bba15001f\anstyle-wincon-3.0.11\src\windows.rs:

@@ -1,0 +1,98 @@
+[
+  {
+    "submission_id": "sub_0001",
+    "anonymized_student_id": "stu_001",
+    "assignment_id": "assignment_01_threaded_prime_count",
+    "term": "2024F",
+    "submitted_at": "2024-10-02T20:13:00-04:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2024F/assignment_01_threaded_prime_count/sub_0001/submission.zip",
+    "template_archive": "templates/assignment_01_threaded_prime_count/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0002",
+    "anonymized_student_id": "stu_014",
+    "assignment_id": "assignment_01_threaded_prime_count",
+    "term": "2024F",
+    "submitted_at": "2024-10-02T22:07:00-04:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2024F/assignment_01_threaded_prime_count/sub_0002/submission.zip",
+    "template_archive": "templates/assignment_01_threaded_prime_count/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0003",
+    "anonymized_student_id": "stu_027",
+    "assignment_id": "assignment_01_threaded_prime_count",
+    "term": "2024F",
+    "submitted_at": "2024-10-03T00:21:00-04:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2024F/assignment_01_threaded_prime_count/sub_0003/submission.zip",
+    "template_archive": "templates/assignment_01_threaded_prime_count/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0004",
+    "anonymized_student_id": "stu_033",
+    "assignment_id": "assignment_01_threaded_prime_count",
+    "term": "2024F",
+    "submitted_at": "2024-10-03T00:58:00-04:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2024F/assignment_01_threaded_prime_count/sub_0004/submission.zip",
+    "template_archive": "templates/assignment_01_threaded_prime_count/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0005",
+    "anonymized_student_id": "stu_102",
+    "assignment_id": "assignment_02_gradebook_csv",
+    "term": "2025W",
+    "submitted_at": "2025-02-11T18:11:00-05:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2025W/assignment_02_gradebook_csv/sub_0005/submission.zip",
+    "template_archive": "templates/assignment_02_gradebook_csv/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0006",
+    "anonymized_student_id": "stu_119",
+    "assignment_id": "assignment_02_gradebook_csv",
+    "term": "2025W",
+    "submitted_at": "2025-02-11T20:42:00-05:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2025W/assignment_02_gradebook_csv/sub_0006/submission.zip",
+    "template_archive": "templates/assignment_02_gradebook_csv/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0007",
+    "anonymized_student_id": "stu_141",
+    "assignment_id": "assignment_02_gradebook_csv",
+    "term": "2025W",
+    "submitted_at": "2025-02-11T23:05:00-05:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2025W/assignment_02_gradebook_csv/sub_0007/submission.zip",
+    "template_archive": "templates/assignment_02_gradebook_csv/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  },
+  {
+    "submission_id": "sub_0008",
+    "anonymized_student_id": "stu_155",
+    "assignment_id": "assignment_02_gradebook_csv",
+    "term": "2025W",
+    "submitted_at": "2025-02-12T00:12:00-05:00",
+    "source_type": "synthetic_historical_like",
+    "language": "c",
+    "submission_archive": "submissions/2025W/assignment_02_gradebook_csv/sub_0008/submission.zip",
+    "template_archive": "templates/assignment_02_gradebook_csv/template.zip",
+    "notes": "Generated benchmark submission; not real student work."
+  }
+]
