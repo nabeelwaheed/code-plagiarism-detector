@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend API Tester</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 20px; background-color: #f4f4f9; color: #333; }
+        .container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 4px; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
+        button:hover { background-color: #0056b3; }
+        .btn-small { width: auto; padding: 2px 8px; font-size: 0.8rem; margin-left: 10px; background: #28a745; }
+        #log-panel { background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 8px; height: 300px; overflow-y: auto; font-family: monospace; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; margin-left: 10px; background: #dc3545; color: white; vertical-align: middle; }
+        .status-badge.active { background: #28a745; }
+    </style>
+</head>
+<body>
+
+    <h1>Backend Route Tester <span id="auth-status" class="status-badge">Not Logged In</span></h1>
+    
+    <div class="container">
+        <div class="card">
+            <h2>0. Login User</h2>
+            <div class="form-group"><label>Email</label><input type="email" id="login-email"></div>
+            <div class="form-group"><label>Password</label><input type="password" id="login-password"></div>
+            <button onclick="handleLogin()">Login</button>
+        </div>
+
+        <div class="card">
+            <h2>1. Register User</h2>
+            <div class="form-group"><label>Name</label><input type="text" id="reg-name"></div>
+            <div class="form-group"><label>Email</label><input type="email" id="reg-email"></div>
+            <div class="form-group"><label>Password</label><input type="password" id="reg-password"></div>
+            <div class="form-group"><label>Role</label>
+                <select id="reg-role">
+                    <option value="student">Student</option>
+                    <option value="instructor">Instructor</option>
+                </select>
+            </div>
+            <button onclick="sendJson('/users/register', 'POST', 'reg')">Register User</button>
+        </div>
+
+        <div class="card">
+            <h2>2. Create Course</h2>
+            <div class="form-group"><label>Course Code</label><input type="text" id="course-course_code" placeholder="e.g. CS101"></div>
+            <div class="form-group"><label>Term</label><input type="text" id="course-term" placeholder="e.g. Fall 2026"></div>
+            <div class="form-group"><label>Is Active</label>
+                <select id="course-is_active">
+                    <option value="true">True</option>
+                    <option value="false">False</option>
+                </select>
+            </div>
+            <button onclick="sendJson('/courses', 'POST', 'course')">Create Course</button>
+        </div>
+
+        <div class="card">
+            <h2>3. Create Enrollment</h2>
+            <div class="form-group">
+                <label>Course <button class="btn-small" onclick="loadAllCourses()">Refresh Data</button></label>
+                <select id="enrol-course_id"><option value="">-- Load Courses First --</option></select>
+            </div>
+            <div class="form-group"><label>User Email</label><input type="email" id="enrol-email" placeholder="student@example.com"></div>
+            <div class="form-group"><label>Role</label>
+                <select id="enrol-role">
+                    <option value="student">Student</option>
+                    <option value="instructor">Instructor</option>
+                    <option value="ta">TA</option>
+                </select>
+            </div>
+            <button onclick="enrollUser()">Submit Enrollment</button>
+        </div>
+
+        <div class="card">
+            <h2>4. Create Assignment</h2>
+            <div class="form-group">
+                <label>Course</label>
+                <select id="asgn-course_id"><option value="">-- Load Courses First --</option></select>
+            </div>
+            <div class="form-group"><label>Title</label><input type="text" id="asgn-title"></div>
+            <div class="form-group"><label>Due Date</label><input type="datetime-local" id="asgn-due_date"></div>
+            <div class="form-group"><label>Assignment File (.zip)</label><input type="file" id="asgn-file" accept=".zip"></div>
+            <button onclick="createAssignment()">Submit Assignment</button>
+        </div>
+
+        <div class="card">
+            <h2>5. Set Assignment Template</h2>
+            <div class="form-group">
+                <label>Course</label>
+                <select id="tmpl-course_id" onchange="loadAssignments(this.value, 'tmpl-assignment_id')"><option value="">-- Load Courses First --</option></select>
+            </div>
+            <div class="form-group">
+                <label>Assignment</label>
+                <select id="tmpl-assignment_id"><option value="">-- Select Course First --</option></select>
+            </div>
+            <div class="form-group"><label>Version</label><input type="text" id="tmpl-version" placeholder="e.g. 1"></div>
+            <div class="form-group"><label>Template File (.zip)</label><input type="file" id="tmpl-file" accept=".zip"></div>
+            <button onclick="submitTemplate()">Submit Template</button>
+        </div>
+
+        <div class="card">
+            <h2>6. Upload Submission</h2>
+            <div class="form-group">
+                <label>Course</label>
+                <select id="sub-course_id" onchange="loadAssignments(this.value, 'sub-assignment_id')"><option value="">-- Load Courses First --</option></select>
+            </div>
+            <div class="form-group">
+                <label>Assignment</label>
+                <select id="sub-assignment_id"><option value="">-- Select Course First --</option></select>
+            </div>
+            <div class="form-group"><label>Student Email</label><input type="email" id="sub-email" placeholder="student@example.com"></div>
+            <div class="form-group"><label>Submission Date</label><input type="datetime-local" id="sub-submission_date"></div>
+            <div class="form-group"><label>Metadata (JSON)</label><textarea id="sub-metadata" rows="2" placeholder='{"notes": "test"}'></textarea></div>
+            <div class="form-group"><label>Zip File</label><input type="file" id="sub-file" accept=".zip"></div>
+            <button onclick="submitZip()">Upload Zip File</button>
+        </div>
+
+        <div class="card">
+            <h2>7. Trigger Analysis Job</h2>
+            <div class="form-group">
+                <label>Course</label>
+                <select id="job-course_id" onchange="loadAssignments(this.value, 'job-assignment_id')"><option value="">-- Load Courses First --</option></select>
+            </div>
+            <div class="form-group">
+                <label>Assignment</label>
+                <select id="job-assignment_id" onchange="loadTemplates(document.getElementById('job-course_id').value, this.value, 'job-template_version_id'); loadSubmissions(document.getElementById('job-course_id').value, this.value, 'job-submission_id')">
+                    <option value="">-- Select Course First --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Template Version</label>
+                <select id="job-template_version_id"><option value="">-- Select Assignment First --</option></select>
+            </div>
+            <div class="form-group">
+                <label>Student Submission</label>
+                <select id="job-submission_id"><option value="">-- Select Assignment First --</option></select>
+            </div>
+            <div class="form-group"><label>Params (JSON)</label><textarea id="job-params" rows="2" placeholder='{"threshold": 0.85}'></textarea></div>
+            <button onclick="triggerJob()">Start Analysis</button>
+        </div>
+
+        <div class="card">
+            <h2>8. Check Job Status</h2>
+            <div class="form-group"><label>Job ID</label><input type="text" id="status-job_id"></div>
+            <button onclick="fetchData('/jobs/' + document.getElementById('status-job_id').value)">Get Job Status</button>
+        </div>
+
+        <div class="card">
+            <h2>9. View Similarity Results</h2>
+            <div class="form-group"><label>Job ID</label><input type="text" id="results-job_id"></div>
+            <button onclick="fetchData('/jobs/' + document.getElementById('results-job_id').value + '/results')">Get Comparison Results</button>
+        </div>
+    </div>
+
+    <h2>Response Log</h2>
+    <div id="log-panel">Waiting for requests...</div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api'; 
+        let loggedInUserId = null; 
+
+        function logToPanel(message) {
+            const panel = document.getElementById('log-panel');
+            const time = new Date().toLocaleTimeString();
+            panel.innerHTML = `[${time}] ${message}<br><br>` + panel.innerHTML;
+        }
+
+        function getAuthHeaders(isJson = true) {
+            const headers = {};
+            if (isJson) headers['Content-Type'] = 'application/json';
+            if (loggedInUserId) {
+                headers['Authorization'] = `Bearer ${loggedInUserId}`;
+                headers['X-User-Id'] = loggedInUserId; 
+            }
+            return headers;
+        }
+
+        async function fetchRequest(url, method, payload = null, isFormData = false) {
+            logToPanel(`Sending ${method} request to ${url}...`);
+            const options = { method, headers: getAuthHeaders(!isFormData), credentials: 'include' };
+            if (payload) options.body = isFormData ? payload : JSON.stringify(payload);
+
+            try {
+                const response = await fetch(url, options);
+                const rawText = await response.text();
+                let data;
+                try { data = JSON.parse(rawText); } catch(e) { data = { raw_response: rawText }; }
+                
+                if (response.ok) logToPanel(`SUCCESS: ${JSON.stringify(data, null, 2)}`);
+                else logToPanel(`SERVER ERROR (${response.status}): ${JSON.stringify(data, null, 2)}`);
+            } catch (err) {
+                logToPanel(`NETWORK ERROR: ${err.message}`);
+            }
+        }
+
+        async function loadAllCourses() {
+            const selectIds = ['enrol-course_id', 'asgn-course_id', 'tmpl-course_id', 'sub-course_id', 'job-course_id'];
+            try {
+                const response = await fetch(`${API_BASE}/courses`, { method: 'GET', headers: getAuthHeaders(true) });
+                const data = await response.json();
+                if (response.ok) {
+                    selectIds.forEach(id => {
+                        const select = document.getElementById(id);
+                        if(select) {
+                            select.innerHTML = '<option value="">-- Select a Course --</option>';
+                            data.forEach(course => {
+                                const opt = document.createElement('option');
+                                opt.value = course.id;
+                                opt.textContent = `${course.course_code} (${course.term})`;
+                                select.appendChild(opt);
+                            });
+                        }
+                    });
+                    logToPanel(`Loaded ${data.length} courses into dropdowns.`);
+                }
+            } catch (err) { logToPanel("Error loading courses: " + err.message); }
+        }
+
+        async function loadAssignments(courseId, targetSelectId) {
+            if (!courseId) return;
+            const select = document.getElementById(targetSelectId);
+            select.innerHTML = '<option value="">Loading assignments...</option>';
+            try {
+                const response = await fetch(`${API_BASE}/courses/${courseId}/assignments`, { method: 'GET', headers: getAuthHeaders(true) });
+                const data = await response.json();
+                if (response.ok) {
+                    select.innerHTML = '<option value="">-- Select an Assignment --</option>';
+                    data.forEach(asgn => {
+                        const opt = document.createElement('option');
+                        opt.value = asgn.id;
+                        opt.textContent = asgn.title;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (err) { logToPanel("Error loading assignments"); }
+        }
+
+        async function loadTemplates(courseId, assignmentId, targetSelectId) {
+            if (!courseId || !assignmentId) return;
+            const select = document.getElementById(targetSelectId);
+            select.innerHTML = '<option value="">Loading templates...</option>';
+            try {
+                const response = await fetch(`${API_BASE}/courses/${courseId}/assignments/${assignmentId}/template`, { method: 'GET', headers: getAuthHeaders(true) });
+                const data = await response.json();
+                if (response.ok) {
+                    select.innerHTML = '<option value="">-- Select a Template --</option>';
+                    data.forEach(tmpl => {
+                        const opt = document.createElement('option');
+                        opt.value = tmpl.id;
+                        opt.textContent = `Version ${tmpl.version}`; 
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (err) { logToPanel("Error loading templates"); }
+        }
+
+        async function loadSubmissions(courseId, assignmentId, targetSelectId) {
+            if (!courseId || !assignmentId) return;
+            const select = document.getElementById(targetSelectId);
+            select.innerHTML = '<option value="">Loading submissions...</option>';
+            try {
+                const response = await fetch(`${API_BASE}/courses/${courseId}/assignments/${assignmentId}/submit`, { method: 'GET', headers: getAuthHeaders(true) });
+                const data = await response.json();
+                if (response.ok) {
+                    select.innerHTML = '<option value="">-- Select a Submission --</option>';
+                    data.forEach(sub => {
+                        const opt = document.createElement('option');
+                        opt.value = sub.id;
+                        opt.textContent = `Submission ID: ${sub.id.substring(0,8)}...`; 
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (err) { logToPanel("Error loading submissions"); }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            logToPanel(`Attempting login for ${email}...`);
+            try {
+                const response = await fetch(`${API_BASE}/users/login`, {
+                    method: 'POST', headers: getAuthHeaders(true), body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    loggedInUserId = data.user.id; 
+                    document.getElementById('auth-status').textContent = `Logged In as ${data.user.name || 'User'}`;
+                    document.getElementById('auth-status').classList.add('active');
+                    logToPanel(`SUCCESS: User ID captured!`);
+                } else { logToPanel(`SERVER ERROR: ${JSON.stringify(data)}`); }
+            } catch (err) { logToPanel(`NETWORK ERROR: ${err.message}`); }
+        }
+
+        function enrollUser() {
+            const courseId = document.getElementById('enrol-course_id').value;
+            if (!courseId) return alert("Select a course");
+            fetchRequest(`${API_BASE}/courses/${courseId}/enroll`, 'POST', {
+                email: document.getElementById('enrol-email').value,
+                role: document.getElementById('enrol-role').value
+            });
+        }
+
+        function createAssignment() {
+            const courseId = document.getElementById('asgn-course_id').value;
+            if (!courseId) return alert("Select a course");
+            
+            const fileInput = document.getElementById('asgn-file');
+            if (fileInput.files.length === 0) return alert("Please select a file!");
+
+            const formData = new FormData();
+            formData.append('title', document.getElementById('asgn-title').value);
+            formData.append('due_date', document.getElementById('asgn-due_date').value);
+            formData.append('file', fileInput.files[0]);
+
+            fetchRequest(`${API_BASE}/courses/${courseId}/assignments`, 'POST', formData, true);
+        }
+
+        function submitTemplate() {
+            const courseId = document.getElementById('tmpl-course_id').value;
+            const assignmentId = document.getElementById('tmpl-assignment_id').value;
+            if (!courseId || !assignmentId) return alert("Select course and assignment");
+            
+            const fileInput = document.getElementById('tmpl-file');
+            if (fileInput.files.length === 0) return alert("Please select a template .zip file!");
+
+            const formData = new FormData();
+            formData.append('version', document.getElementById('tmpl-version').value);
+            formData.append('file', fileInput.files[0]);
+
+            fetchRequest(`${API_BASE}/courses/${courseId}/assignments/${assignmentId}/template`, 'POST', formData, true);
+        }
+
+        function submitZip() {
+            const courseId = document.getElementById('sub-course_id').value;
+            const assignmentId = document.getElementById('sub-assignment_id').value;
+            
+            if (!courseId || !assignmentId) return alert("Select a course and an assignment");
+            
+            const formData = new FormData();
+            formData.append('email', document.getElementById('sub-email').value);
+            formData.append('submission_date', document.getElementById('sub-submission_date').value);
+            
+            const rawMetadata = document.getElementById('sub-metadata').value;
+            const safeMetadata = rawMetadata.trim() === '' ? '{}' : rawMetadata;
+            formData.append('metadata', safeMetadata);
+            
+            const fileInput = document.getElementById('sub-file');
+            if (fileInput.files.length === 0) return alert("Please select a zip file to submit!");
+            formData.append('file', fileInput.files[0]);
+
+            fetchRequest(`${API_BASE}/courses/${courseId}/assignments/${assignmentId}/submit`, 'POST', formData, true);
+        }
+
+        // --- UPDATED FUNCTION: Re-mapped the payload keys to match the controller exactly ---
+        function triggerJob() {
+            const courseId = document.getElementById('job-course_id').value;
+            const assignmentId = document.getElementById('job-assignment_id').value;
+            const templateVersionId = document.getElementById('job-template_version_id').value;
+            const submissionId = document.getElementById('job-submission_id').value;
+
+            if (!courseId || !assignmentId || !templateVersionId || !submissionId) {
+                return alert("Please select a course, assignment, template, and submission.");
+            }
+
+            fetchRequest(`${API_BASE}/courses/${courseId}/assignments/${assignmentId}/analyze`, 'POST', {
+                template: templateVersionId, 
+                submission: submissionId,    
+                params: JSON.parse(document.getElementById('job-params').value || '{}')
+            });
+        }
+
+        async function sendJson(endpoint, method, prefix) {
+            const inputs = document.querySelectorAll(`[id^="${prefix}-"]`);
+            const payload = {};
+            inputs.forEach(input => {
+                const key = input.id.replace(`${prefix}-`, '');
+                let value = input.value;
+                if (value === 'true') value = true;
+                if (value === 'false') value = false;
+                payload[key] = value;
+            });
+            fetchRequest(`${API_BASE}${endpoint}`, method, payload);
+        }
+
+        async function fetchData(endpoint) {
+            if (endpoint.includes('undefined') || endpoint.endsWith('//results')) return logToPanel("Enter a valid ID");
+            fetchRequest(`${API_BASE}${endpoint}`, 'GET');
+        }
+    </script>
+</body>
+</html>

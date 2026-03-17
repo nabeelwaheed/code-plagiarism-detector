@@ -1,0 +1,12 @@
+[package]
+name = "cosc_4p02"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cosc_4p02"
+path = "4p02_java_src/main.rs"
+
+[dependencies]
+tree-sitter = "0.25"
+tree-sitter-java = "0.23"
