@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "engine_version": "0.1.0",
+  "language": "cpp",
+  "params_used": {
+    "k_gram": 5,
+    "window": 10,
+    "gst_min_match": 10,
+    "top_k": 5,
+    "options": {
+      "ignore_comments": true,
+      "ignore_pp_directives": true,
+      "consistent_identifier_renaming": true,
+      "anonymize_literals": true
+    }
+  },
+  "pairs": [
+    {
+      "a_id": "template",
+      "b_id": "student",
+      "score_primary": 0.9736842105263158,
+      "score_secondary": 0.9965075669383003,
+      "matches": [
+        {
+          "a": {
+            "byte_start": 21,
+            "byte_end": 1063,
+            "line_start": 2,
+            "col_start": 1,
+            "line_end": 44,
+            "col_end": 10
+          },
+          "b": {
+            "byte_start": 21,
+            "byte_end": 1161,
+            "line_start": 2,
+            "col_start": 1,
+            "line_end": 44,
+            "col_end": 10
+          }
+        },
+        {
+          "a": {
+            "byte_start": 1072,
+            "byte_end": 1673,
+            "line_start": 44,
+            "col_start": 20,
+            "line_end": 73,
+            "col_end": 1
+          },
+          "b": {
+            "byte_start": 1162,
+            "byte_end": 1794,
+            "line_start": 44,
+            "col_start": 12,
+            "line_end": 73,
+            "col_end": 1
+          }
+        }
+      ]
+    }
+  ]
+}
