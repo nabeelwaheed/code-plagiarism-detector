@@ -1,0 +1,71 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 @startuml\
+skinparam linetype ortho\
+skinparam shadowing false\
+skinparam nodesep 10\
+skinparam ranksep 110\
+\
+title System Context Diagram\
+\
+actor Student\
+actor Instructor\
+actor Admin as "System Admin"\
+\
+rectangle "Academic Integrity System" as SYS \{\
+  [Web UI] as UI\
+  [Backend API] as API\
+  [Analysis Worker] as WORKER\
+\}\
+\
+database "Metadata DB\\n(PostgreSQL)" as DB\
+cloud "Object Storage\\n(Filesystem / S3-like)" as STORE\
+rectangle "Email Service" as EMAIL\
+\
+Student --> UI : Actions (see note)\
+Instructor --> UI : Actions (see note)\
+Admin --> UI : Actions (see note)\
+\
+note right of Student\
+Student:\
+- Submit assignment\
+- View own submissions\
+end note\
+\
+note right of Instructor\
+Instructor:\
+- Manage courses/assignments\
+- Upload templates\
+- Run analysis\
+- View results\
+end note\
+\
+note right of Admin\
+System Admin:\
+- Manage system \
+end note\
+\
+UI --> API : HTTPS REST\
+\
+API --> DB : Metadata\
+API --> STORE : Files\
+API --> WORKER : Create job\
+WORKER --> DB : Status + results\
+WORKER --> STORE : Read inputs\
+\
+API --> EMAIL : Notify (optional)\
+\
+note left of SYS\
+Privacy constraint:\
+Students cannot view\
+other students' identities\
+or similarity reports.\
+end note\
+\
+@enduml\
+}

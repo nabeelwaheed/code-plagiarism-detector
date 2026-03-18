@@ -1,0 +1,97 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 @startuml\
+title Deployment Diagram\
+left to right direction\
+\
+skinparam linetype ortho\
+skinparam shadowing false\
+skinparam nodesep 80\
+skinparam ranksep 110\
+\
+node "User Device" \{\
+  artifact "Browser" as BROWSER\
+\}\
+\
+node "Server Host" \{\
+\
+  node "API Container" \{\
+    artifact "Backend API" as API\
+  \}\
+\
+  node "Worker Container" \{\
+    artifact "Analysis Worker\\n+ Similarity Engine" as WORKER\
+  \}\
+\
+  node "DB Container" \{\
+    database "PostgreSQL" as DB\
+  \}\
+\
+  node "Storage" \{\
+    artifact "Filesystem volume\\nor MinIO (S3)" as STORE\
+  \}\
+\
+  node "Optional Email Provider" \{\
+    artifact "SMTP / Email API" as EMAIL\
+  \}\
+\
+  node "Optional Queue" \{\
+    artifact "Redis / RabbitMQ\\n(or DB job table)" as QUEUE\
+  \}\
+\}\
+\
+BROWSER --> API : HTTPS\
+\
+API --> DB : TCP\
+API --> STORE : storage\
+API --> QUEUE : enqueue\
+WORKER --> QUEUE : dequeue\
+WORKER --> DB : persist\
+WORKER --> STORE : read\
+\
+API --> EMAIL : notify\
+\
+note right of BROWSER\
+End-user accesses system\
+via standard web browser.\
+end note\
+\
+note right of API\
+Backend API:\
+- listens on HTTPS (443)\
+- orchestrates jobs\
+- writes metadata\
+end note\
+\
+note right of DB\
+PostgreSQL stores:\
+- users / courses\
+- submissions metadata\
+- jobs + results\
+end note\
+\
+note right of STORE\
+Storage contains:\
+- submission archives\
+- templates\
+end note\
+\
+note right of QUEUE\
+Queue is optional:\
+- Redis / RabbitMQ\
+- or DB-backed job table\
+end note\
+\
+note right of EMAIL\
+Email provider is optional:\
+- email API\
+- used for notifications\
+end note\
+\
+@enduml\
+}
