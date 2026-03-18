@@ -2,7 +2,7 @@
 
 ## Scope
 
-This design tests only the C comparison engine portion of the project. It does not test the web UI, backend storage, async job status, or repository persistence path from the SRS.
+This design tests only the Rust C comparison engine portion of the project. The repo now includes backend upload and extraction code plus a separate Java processor prototype, but this harness does not validate those paths end to end. It does not test the web UI, backend storage, async job status, or repository persistence path from the SRS.
 
 ## Engine Input Format
 
@@ -50,13 +50,15 @@ The harness then:
 6. executes the engine binary directly
 7. evaluates observed scores against manifest expectations
 
+This remains the authoritative evaluation path for the C engine because it targets the Rust source tree directly. The backend prototype currently shells out to a bundled `engine.exe` with a simpler request-building path.
+
 ## Fixture Layout
 
 Assignment realism is preserved through fixture folders:
 
-- `assignment-tests/Assignment1/test1`
-- `assignment-tests/Assignment1/test2`
-- `assignment-tests/Assignment2/test1`
+- `test-data/assignment-tests/Assignment1/test1`
+- `test-data/assignment-tests/Assignment1/test2`
+- `test-data/assignment-tests/Assignment2/test1`
 
 Each case contains:
 

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="480.0" y="30" text-anchor="middle" font-size="22" font-family="Segoe UI, Arial, sans-serif" fill="#1a1a1a">Per-Assignment Metrics</text>
+<text x="480.0" y="52" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#555">Precision, recall, and false positive rate at the selected review threshold</text>
+<line x1="80" y1="430" x2="930" y2="430" stroke="#333" stroke-width="1.5"/>
+<line x1="80" y1="60" x2="80" y2="430" stroke="#333" stroke-width="1.5"/>
+<line x1="80" y1="430.00" x2="930" y2="430.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="434.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.0</text>
+<line x1="80" y1="393.00" x2="930" y2="393.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="397.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.1</text>
+<line x1="80" y1="356.00" x2="930" y2="356.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="360.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.2</text>
+<line x1="80" y1="319.00" x2="930" y2="319.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="323.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.3</text>
+<line x1="80" y1="282.00" x2="930" y2="282.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="286.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.4</text>
+<line x1="80" y1="245.00" x2="930" y2="245.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="249.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.5</text>
+<line x1="80" y1="208.00" x2="930" y2="208.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="212.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.6</text>
+<line x1="80" y1="171.00" x2="930" y2="171.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="175.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.7</text>
+<line x1="80" y1="134.00" x2="930" y2="134.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="138.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.8</text>
+<line x1="80" y1="97.00" x2="930" y2="97.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="101.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.9</text>
+<line x1="80" y1="60.00" x2="930" y2="60.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70" y="64.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">1.0</text>
+<rect x="710" y="80" width="18" height="12" fill="#1f77b4"/>
+<text x="738" y="90" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">precision</text>
+<rect x="710" y="102" width="18" height="12" fill="#2ca02c"/>
+<text x="738" y="112" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">recall</text>
+<rect x="710" y="124" width="18" height="12" fill="#d62728"/>
+<text x="738" y="134" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">fpr</text>
+<rect x="176.67" y="152.50" width="26.00" height="277.50" fill="#1f77b4" opacity="0.9"/>
+<rect x="206.67" y="60.00" width="26.00" height="370.00" fill="#2ca02c" opacity="0.9"/>
+<rect x="236.67" y="245.00" width="26.00" height="185.00" fill="#d62728" opacity="0.9"/>
+<text x="221.67" y="458" text-anchor="middle" font-size="11" font-family="Segoe UI, Arial, sans-serif" fill="#444">assignment_01_threaded_prime_count</text>
+<rect x="460.00" y="245.00" width="26.00" height="185.00" fill="#1f77b4" opacity="0.9"/>
+<rect x="490.00" y="60.00" width="26.00" height="370.00" fill="#2ca02c" opacity="0.9"/>
+<rect x="520.00" y="306.67" width="26.00" height="123.33" fill="#d62728" opacity="0.9"/>
+<text x="505.00" y="458" text-anchor="middle" font-size="11" font-family="Segoe UI, Arial, sans-serif" fill="#444">assignment_02_gradebook_csv</text>
+<rect x="743.33" y="430.00" width="26.00" height="0.00" fill="#1f77b4" opacity="0.9"/>
+<rect x="773.33" y="430.00" width="26.00" height="0.00" fill="#2ca02c" opacity="0.9"/>
+<rect x="803.33" y="430.00" width="26.00" height="0.00" fill="#d62728" opacity="0.9"/>
+<text x="788.33" y="458" text-anchor="middle" font-size="11" font-family="Segoe UI, Arial, sans-serif" fill="#444">cross_assignment</text>
+<text x="480.0" y="522" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Assignment group</text>
+<text x="18" y="270.0" transform="rotate(-90 18 270.0)" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Metric value</text>
+</svg>

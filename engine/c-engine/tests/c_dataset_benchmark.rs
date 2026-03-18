@@ -29,10 +29,21 @@ fn root_benchmark_runner_produces_metrics_outputs() {
         .unwrap()
         .to_path_buf();
     let script_path = repo_root.join("scripts").join("run_c_engine_benchmark.py");
-    let dataset_root = repo_root
+    let preferred_dataset_root = repo_root
+        .join("engine")
+        .join("c-engine")
+        .join("test-data")
+        .join("benchmarks")
+        .join("synthetic_c_dataset");
+    let legacy_dataset_root = repo_root
         .join("evaluation")
         .join("benchmark_data")
         .join("synthetic_historical_like_c_dataset");
+    let dataset_root = if preferred_dataset_root.is_dir() {
+        preferred_dataset_root
+    } else {
+        legacy_dataset_root
+    };
     let output_dir = tempdir().unwrap();
     let engine_binary = PathBuf::from(env!("CARGO_BIN_EXE_engine"));
 
@@ -61,10 +72,27 @@ fn root_benchmark_runner_produces_metrics_outputs() {
     let summary_path = output_dir.path().join("summary.json");
     let threshold_path = output_dir.path().join("threshold_sweep.csv");
     let per_assignment_path = output_dir.path().join("per_assignment.json");
+    let threshold_graph_path = output_dir.path().join("threshold_sweep.svg");
+    let score_distribution_graph_path = output_dir.path().join("score_distribution.svg");
+    let per_assignment_graph_path = output_dir.path().join("per_assignment_metrics.svg");
 
     assert!(summary_path.is_file(), "missing summary.json");
     assert!(threshold_path.is_file(), "missing threshold_sweep.csv");
     assert!(per_assignment_path.is_file(), "missing per_assignment.json");
+    assert!(threshold_graph_path.is_file(), "missing threshold_sweep.svg");
+    assert!(
+        score_distribution_graph_path.is_file(),
+        "missing score_distribution.svg"
+    );
+    assert!(
+        per_assignment_graph_path.is_file(),
+        "missing per_assignment_metrics.svg"
+    );
+    assert!(
+        stdout.contains("Results saved to:"),
+        "benchmark runner stdout should list saved result paths\nstdout:\n{}",
+        stdout
+    );
 
     let summary: Value =
         serde_json::from_str(&std::fs::read_to_string(&summary_path).unwrap()).unwrap();
@@ -77,5 +105,9 @@ fn root_benchmark_runner_produces_metrics_outputs() {
     assert_eq!(
         summary["path_resolution"]["runner_uses_temporary_extraction"].as_bool(),
         Some(true)
+    );
+    assert!(
+        summary["artifacts"]["threshold_sweep_graph"].is_string(),
+        "summary.json should expose graph artifact paths"
     );
 }

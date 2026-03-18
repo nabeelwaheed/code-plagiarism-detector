@@ -1,0 +1,24 @@
+{
+  "score_field": "score_secondary",
+  "recommended_review_threshold": {
+    "score_field": "score_secondary",
+    "threshold": 0.36,
+    "tp": 4,
+    "fp": 2,
+    "tn": 5,
+    "fn": 0,
+    "precision": 0.6666666666666666,
+    "recall": 1.0,
+    "fpr": 0.2857142857142857,
+    "fnr": 0.0,
+    "specificity": 0.7142857142857143,
+    "accuracy": 0.8181818181818182,
+    "balanced_accuracy": 0.8571428571428572,
+    "f1": 0.8,
+    "policy": "provisional review-threshold candidate chosen by best balanced accuracy, with recall and specificity used as tie-breakers",
+    "provisional": true,
+    "validity": "synthetic historical-like benchmark only; threshold is for human review triage, not guilt",
+    "score_field_is_engine_primary": false,
+    "pair_count": 11
+  }
+}

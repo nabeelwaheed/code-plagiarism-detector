@@ -17,7 +17,7 @@ from typing import Any
 # - compare mode verification
 SCRIPT_DIR = Path(__file__).resolve().parent
 PACKAGE_ROOT = SCRIPT_DIR.parent
-DEFAULT_FIXTURES_ROOT = PACKAGE_ROOT / "assignment-tests"
+DEFAULT_FIXTURES_ROOT = PACKAGE_ROOT / "test-data" / "assignment-tests"
 CASE_TEMP_ROOT = PACKAGE_ROOT / "target" / "assignment-test-temp"
 ALLOWED_SOURCE_SUFFIXES = {".c", ".h"}
 DEFAULT_PARAMS = {
@@ -70,7 +70,7 @@ def parse_args() -> argparse.Namespace:
 # - emit summary and exit status
 def main() -> int:
     args = parse_args()
-    fixtures_root = args.fixtures_root.resolve()
+    fixtures_root = resolve_fixtures_root(args.fixtures_root)
     engine_binary = resolve_engine_binary(args.engine_binary)
     manifests = discover_manifests(fixtures_root, args.case)
     if not manifests:
@@ -122,6 +122,18 @@ def discover_manifests(fixtures_root: Path, case_filters: list[str]) -> list[Pat
 
 def normalize_case_filter(value: str) -> str:
     return value.replace("\\", "/").strip("/")
+
+
+def resolve_fixtures_root(fixtures_root: Path) -> Path:
+    candidate = fixtures_root.resolve()
+    if candidate.is_dir():
+        return candidate
+
+    legacy = PACKAGE_ROOT / "assignment-tests"
+    if candidate == DEFAULT_FIXTURES_ROOT.resolve() and legacy.is_dir():
+        return legacy.resolve()
+
+    return candidate
 
 
 # - prefer built binary

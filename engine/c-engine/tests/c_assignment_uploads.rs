@@ -25,7 +25,14 @@ fn python_command() -> Command {
 // - fail fast on harness stderr
 #[test]
 fn c_assignment_upload_cases_pass() {
-    let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("assignment-tests");
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let preferred_manifest_root = repo_root.join("test-data").join("assignment-tests");
+    let legacy_manifest_root = repo_root.join("assignment-tests");
+    let manifest_root = if preferred_manifest_root.is_dir() {
+        preferred_manifest_root
+    } else {
+        legacy_manifest_root
+    };
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("scripts")
         .join("run_c_engine_assignment_tests.py");

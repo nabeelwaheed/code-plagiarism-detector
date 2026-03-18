@@ -1,0 +1,17 @@
+C Engine Benchmark Summary
+Dataset root: C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\benchmarks\synthetic_c_dataset
+Pairs: 11 scored / 11 total
+Preferred review signal: score_secondary (engine primary is score_primary)
+Recommended provisional review threshold: 0.36 on score_secondary
+At that threshold: precision=0.667 recall=1.000 fpr=0.286 fnr=0.000
+Validity: synthetic historical-like benchmark only; threshold is for human review triage, not guilt.
+Results saved to:
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\summary.json
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\summary.txt
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\threshold_sweep.csv
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\per_assignment.json
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\confusion_matrix.json
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\pair_results.json
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\threshold_sweep.svg
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\score_distribution.svg
+- C:\Users\tbone\Documents\4P02\Anti-Vibe-Coder\engine\c-engine\test-data\output\benchmark\per_assignment_metrics.svg

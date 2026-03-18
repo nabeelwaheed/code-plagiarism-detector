@@ -14,8 +14,18 @@ pub fn repo_root() -> PathBuf {
 }
 
 // - fixture root helper
+pub fn test_data_root() -> PathBuf {
+    let preferred = repo_root().join("test-data");
+    if preferred.is_dir() {
+        return preferred;
+    }
+
+    repo_root().join("testdata")
+}
+
+// - fixture root helper
 pub fn testdata_path(rel: &str) -> PathBuf {
-    repo_root().join("testdata").join(rel)
+    test_data_root().join(rel)
 }
 
 // - schema root helper

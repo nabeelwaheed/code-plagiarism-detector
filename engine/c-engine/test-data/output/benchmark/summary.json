@@ -1,0 +1,306 @@
+{
+  "dataset": {
+    "root": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\benchmarks\\synthetic_c_dataset",
+    "pair_count": 11,
+    "submission_count": 8,
+    "source_type_counts": {
+      "synthetic_historical_like": 11
+    }
+  },
+  "path_resolution": {
+    "relative_paths_resolved_from_dataset_root": true,
+    "dataset_root": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\benchmarks\\synthetic_c_dataset",
+    "submission_archives_are_first_class_inputs": true,
+    "template_archives_are_first_class_inputs": true,
+    "engine_consumes_zips_directly": false,
+    "runner_uses_temporary_extraction": true,
+    "different_template_archives_combined_for_single_engine_template_payload": true
+  },
+  "execution": {
+    "total_pairs": 11,
+    "scored_pairs": 11,
+    "failed_pairs": 0,
+    "failed_pair_ids": []
+  },
+  "score_fields": {
+    "score_primary": {
+      "observed_score_range": {
+        "min": 0.01834862385321101,
+        "max": 0.13333333333333333
+      },
+      "candidate_thresholds": {
+        "best_balanced_accuracy": {
+          "score_field": "score_primary",
+          "threshold": 0.06,
+          "tp": 3,
+          "fp": 2,
+          "tn": 5,
+          "fn": 1,
+          "precision": 0.6,
+          "recall": 0.75,
+          "fpr": 0.2857142857142857,
+          "fnr": 0.25,
+          "specificity": 0.7142857142857143,
+          "accuracy": 0.7272727272727273,
+          "balanced_accuracy": 0.7321428571428572,
+          "f1": 0.6666666666666666
+        },
+        "best_f1": {
+          "score_field": "score_primary",
+          "threshold": 0.06,
+          "tp": 3,
+          "fp": 2,
+          "tn": 5,
+          "fn": 1,
+          "precision": 0.6,
+          "recall": 0.75,
+          "fpr": 0.2857142857142857,
+          "fnr": 0.25,
+          "specificity": 0.7142857142857143,
+          "accuracy": 0.7272727272727273,
+          "balanced_accuracy": 0.7321428571428572,
+          "f1": 0.6666666666666666
+        },
+        "high_recall": {
+          "score_field": "score_primary",
+          "threshold": 0.04,
+          "tp": 4,
+          "fp": 4,
+          "tn": 3,
+          "fn": 0,
+          "precision": 0.5,
+          "recall": 1.0,
+          "fpr": 0.5714285714285714,
+          "fnr": 0.0,
+          "specificity": 0.42857142857142855,
+          "accuracy": 0.6363636363636364,
+          "balanced_accuracy": 0.7142857142857143,
+          "f1": 0.6666666666666666
+        }
+      },
+      "recommended_review_threshold": {
+        "score_field": "score_primary",
+        "threshold": 0.06,
+        "tp": 3,
+        "fp": 2,
+        "tn": 5,
+        "fn": 1,
+        "precision": 0.6,
+        "recall": 0.75,
+        "fpr": 0.2857142857142857,
+        "fnr": 0.25,
+        "specificity": 0.7142857142857143,
+        "accuracy": 0.7272727272727273,
+        "balanced_accuracy": 0.7321428571428572,
+        "f1": 0.6666666666666666,
+        "policy": "provisional review-threshold candidate chosen by best balanced accuracy, with recall and specificity used as tie-breakers",
+        "provisional": true,
+        "validity": "synthetic historical-like benchmark only; threshold is for human review triage, not guilt",
+        "score_field_is_engine_primary": true,
+        "pair_count": 11
+      }
+    },
+    "score_secondary": {
+      "observed_score_range": {
+        "min": 0.13675213675213677,
+        "max": 0.7477744807121661
+      },
+      "candidate_thresholds": {
+        "best_balanced_accuracy": {
+          "score_field": "score_secondary",
+          "threshold": 0.36,
+          "tp": 4,
+          "fp": 2,
+          "tn": 5,
+          "fn": 0,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "fpr": 0.2857142857142857,
+          "fnr": 0.0,
+          "specificity": 0.7142857142857143,
+          "accuracy": 0.8181818181818182,
+          "balanced_accuracy": 0.8571428571428572,
+          "f1": 0.8
+        },
+        "best_f1": {
+          "score_field": "score_secondary",
+          "threshold": 0.36,
+          "tp": 4,
+          "fp": 2,
+          "tn": 5,
+          "fn": 0,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "fpr": 0.2857142857142857,
+          "fnr": 0.0,
+          "specificity": 0.7142857142857143,
+          "accuracy": 0.8181818181818182,
+          "balanced_accuracy": 0.8571428571428572,
+          "f1": 0.8
+        },
+        "high_recall": {
+          "score_field": "score_secondary",
+          "threshold": 0.46,
+          "tp": 4,
+          "fp": 2,
+          "tn": 5,
+          "fn": 0,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "fpr": 0.2857142857142857,
+          "fnr": 0.0,
+          "specificity": 0.7142857142857143,
+          "accuracy": 0.8181818181818182,
+          "balanced_accuracy": 0.8571428571428572,
+          "f1": 0.8
+        }
+      },
+      "recommended_review_threshold": {
+        "score_field": "score_secondary",
+        "threshold": 0.36,
+        "tp": 4,
+        "fp": 2,
+        "tn": 5,
+        "fn": 0,
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "fpr": 0.2857142857142857,
+        "fnr": 0.0,
+        "specificity": 0.7142857142857143,
+        "accuracy": 0.8181818181818182,
+        "balanced_accuracy": 0.8571428571428572,
+        "f1": 0.8,
+        "policy": "provisional review-threshold candidate chosen by best balanced accuracy, with recall and specificity used as tie-breakers",
+        "provisional": true,
+        "validity": "synthetic historical-like benchmark only; threshold is for human review triage, not guilt",
+        "score_field_is_engine_primary": false,
+        "pair_count": 11
+      }
+    }
+  },
+  "preferred_review_signal": {
+    "score_field": "score_secondary",
+    "engine_primary_score_field": "score_primary",
+    "recommended_review_threshold": {
+      "score_field": "score_secondary",
+      "threshold": 0.36,
+      "tp": 4,
+      "fp": 2,
+      "tn": 5,
+      "fn": 0,
+      "precision": 0.6666666666666666,
+      "recall": 1.0,
+      "fpr": 0.2857142857142857,
+      "fnr": 0.0,
+      "specificity": 0.7142857142857143,
+      "accuracy": 0.8181818181818182,
+      "balanced_accuracy": 0.8571428571428572,
+      "f1": 0.8,
+      "policy": "provisional review-threshold candidate chosen by best balanced accuracy, with recall and specificity used as tie-breakers",
+      "provisional": true,
+      "validity": "synthetic historical-like benchmark only; threshold is for human review triage, not guilt",
+      "score_field_is_engine_primary": false,
+      "pair_count": 11
+    }
+  },
+  "per_assignment": {
+    "assignment_01_threaded_prime_count": {
+      "score_field": "score_secondary",
+      "threshold": 0.36,
+      "metrics": {
+        "score_field": "score_secondary",
+        "threshold": 0.36,
+        "tp": 3,
+        "fp": 1,
+        "tn": 1,
+        "fn": 0,
+        "precision": 0.75,
+        "recall": 1.0,
+        "fpr": 0.5,
+        "fnr": 0.0,
+        "specificity": 0.5,
+        "accuracy": 0.8,
+        "balanced_accuracy": 0.75,
+        "f1": 0.8571428571428571
+      },
+      "pair_ids": [
+        "pair_001",
+        "pair_002",
+        "pair_003",
+        "pair_004",
+        "pair_005"
+      ]
+    },
+    "assignment_02_gradebook_csv": {
+      "score_field": "score_secondary",
+      "threshold": 0.36,
+      "metrics": {
+        "score_field": "score_secondary",
+        "threshold": 0.36,
+        "tp": 1,
+        "fp": 1,
+        "tn": 2,
+        "fn": 0,
+        "precision": 0.5,
+        "recall": 1.0,
+        "fpr": 0.3333333333333333,
+        "fnr": 0.0,
+        "specificity": 0.6666666666666666,
+        "accuracy": 0.75,
+        "balanced_accuracy": 0.8333333333333333,
+        "f1": 0.6666666666666666
+      },
+      "pair_ids": [
+        "pair_006",
+        "pair_007",
+        "pair_008",
+        "pair_009"
+      ]
+    },
+    "cross_assignment": {
+      "score_field": "score_secondary",
+      "threshold": 0.36,
+      "metrics": {
+        "score_field": "score_secondary",
+        "threshold": 0.36,
+        "tp": 0,
+        "fp": 0,
+        "tn": 2,
+        "fn": 0,
+        "precision": null,
+        "recall": null,
+        "fpr": 0.0,
+        "fnr": null,
+        "specificity": 1.0,
+        "accuracy": 1.0,
+        "balanced_accuracy": null,
+        "f1": null
+      },
+      "pair_ids": [
+        "pair_010",
+        "pair_011"
+      ]
+    }
+  },
+  "label_semantics": {
+    "field": "should_flag_for_review",
+    "meaning": "true means the pair should be surfaced to a human reviewer; false means it should not be flagged on this benchmark"
+  },
+  "limitations": [
+    "This dataset is synthetic historical-like data, not real historical student work.",
+    "Metrics are benchmark-relative and do not establish field validity.",
+    "Any threshold reported here is provisional and for human review triage only.",
+    "Real anonymized historical submissions with vetted labels are still required for stronger calibration."
+  ],
+  "artifacts": {
+    "summary_json": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\summary.json",
+    "summary_text": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\summary.txt",
+    "threshold_sweep_csv": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\threshold_sweep.csv",
+    "per_assignment_json": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\per_assignment.json",
+    "confusion_matrix_json": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\confusion_matrix.json",
+    "pair_results_json": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\pair_results.json",
+    "threshold_sweep_graph": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\threshold_sweep.svg",
+    "score_distribution_graph": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\score_distribution.svg",
+    "per_assignment_graph": "C:\\Users\\tbone\\Documents\\4P02\\Anti-Vibe-Coder\\engine\\c-engine\\test-data\\output\\benchmark\\per_assignment_metrics.svg"
+  }
+}

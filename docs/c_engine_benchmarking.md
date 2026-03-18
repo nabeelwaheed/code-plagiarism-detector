@@ -12,17 +12,19 @@ It does not change:
 - production upload flow
 - production analysis job flow
 
+The repo now also contains a backend prototype with zip upload handling and a bundled engine binary, but this benchmark intentionally bypasses that path and exercises the maintained Rust C-engine source tree through the engine-side adapter.
+
 ## Dataset Location
 
 The provided benchmark archive is extracted to:
 
-- `evaluation/benchmark_data/synthetic_historical_like_c_dataset/`
+- `engine/c-engine/test-data/benchmarks/synthetic_c_dataset/`
 
 That location was chosen because:
 
-- the repo already has top-level `docs/` and `scripts/`
-- the benchmark is repo-level evaluation material, not product-path data
-- the folder stays obvious for a newcomer
+- the benchmark remains isolated from frontend and backend product paths
+- the folder now sits beside the maintained Rust C engine
+- fixture data, benchmark data, and generated outputs stay in one engine-local home
 - the dataset can remain self-contained without touching frontend or backend code
 
 ## Engine Interface
@@ -53,7 +55,8 @@ The runner:
 4. treats template zip archives as first-class inputs
 5. extracts archives safely in temporary working space
 6. invokes the existing C engine through the engine-side adapter
-7. computes metrics and writes outputs to `evaluation/output/`
+7. computes metrics and writes outputs to `engine/c-engine/test-data/output/benchmark/`
+8. prints a `Results saved to:` block with the generated file paths
 
 ## Template Handling
 
@@ -112,9 +115,12 @@ They are not enough for:
 
 The runner writes:
 
-- `evaluation/output/summary.json`
-- `evaluation/output/summary.txt`
-- `evaluation/output/threshold_sweep.csv`
-- `evaluation/output/per_assignment.json`
-- `evaluation/output/confusion_matrix.json`
-- `evaluation/output/pair_results.json`
+- `engine/c-engine/test-data/output/benchmark/summary.json`
+- `engine/c-engine/test-data/output/benchmark/summary.txt`
+- `engine/c-engine/test-data/output/benchmark/threshold_sweep.csv`
+- `engine/c-engine/test-data/output/benchmark/per_assignment.json`
+- `engine/c-engine/test-data/output/benchmark/confusion_matrix.json`
+- `engine/c-engine/test-data/output/benchmark/pair_results.json`
+- `engine/c-engine/test-data/output/benchmark/threshold_sweep.svg`
+- `engine/c-engine/test-data/output/benchmark/score_distribution.svg`
+- `engine/c-engine/test-data/output/benchmark/per_assignment_metrics.svg`

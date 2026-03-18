@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.util
+import html
 import json
 import sys
 import uuid
@@ -13,9 +14,14 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATASET_ROOT = (
-    REPO_ROOT / "evaluation" / "benchmark_data" / "synthetic_historical_like_c_dataset"
+    REPO_ROOT
+    / "engine"
+    / "c-engine"
+    / "test-data"
+    / "benchmarks"
+    / "synthetic_c_dataset"
 )
-DEFAULT_OUTPUT_DIR = REPO_ROOT / "evaluation" / "output"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "engine" / "c-engine" / "test-data" / "output" / "benchmark"
 ENGINE_HARNESS_PATH = (
     REPO_ROOT / "engine" / "c-engine" / "scripts" / "run_c_engine_assignment_tests.py"
 )
@@ -37,7 +43,7 @@ upload_harness = load_upload_harness()
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the synthetic historical-like C benchmark against the C engine."
+        description="Run the synthetic C benchmark against the C engine."
     )
     parser.add_argument(
         "--dataset-root",
@@ -73,16 +79,16 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    dataset_root = args.dataset_root.resolve()
-    output_dir = args.output_dir.resolve()
+    dataset_root = resolve_dataset_root(args.dataset_root)
+    output_dir = resolve_output_dir(args.output_dir)
     engine_binary = upload_harness.resolve_engine_binary(args.engine_binary)
 
     try:
         dataset = load_dataset(dataset_root)
         pair_results = run_pairs(dataset_root, dataset["pairs"], engine_binary)
         summary = build_summary(dataset_root, dataset, pair_results, args.threshold_step)
-        write_outputs(output_dir, pair_results, summary)
-        print(render_summary(summary))
+        artifacts = write_outputs(output_dir, pair_results, summary)
+        print(render_summary(summary, artifacts))
     except Exception as exc:  # noqa: BLE001
         print(str(exc), file=sys.stderr)
         return 1 if args.check else 0
@@ -90,6 +96,32 @@ def main() -> int:
     if args.check and summary["execution"]["failed_pairs"]:
         return 1
     return 0
+
+
+def resolve_dataset_root(dataset_root: Path) -> Path:
+    candidate = dataset_root.resolve()
+    if candidate.is_dir():
+        return candidate
+
+    legacy = (
+        REPO_ROOT / "evaluation" / "benchmark_data" / "synthetic_historical_like_c_dataset"
+    ).resolve()
+    if candidate == DEFAULT_DATASET_ROOT.resolve() and legacy.is_dir():
+        return legacy
+
+    return candidate
+
+
+def resolve_output_dir(output_dir: Path) -> Path:
+    candidate = output_dir.resolve()
+    if candidate == DEFAULT_OUTPUT_DIR.resolve():
+        return candidate
+
+    legacy = (REPO_ROOT / "evaluation" / "output").resolve()
+    if candidate == legacy:
+        return candidate
+
+    return candidate
 
 
 def load_dataset(dataset_root: Path) -> dict[str, Any]:
@@ -482,7 +514,11 @@ def build_per_assignment(
     return result
 
 
-def write_outputs(output_dir: Path, pair_results: list[dict[str, Any]], summary: dict[str, Any]) -> None:
+def write_outputs(
+    output_dir: Path,
+    pair_results: list[dict[str, Any]],
+    summary: dict[str, Any],
+) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     summary_path = output_dir / "summary.json"
     summary_text_path = output_dir / "summary.txt"
@@ -490,10 +526,27 @@ def write_outputs(output_dir: Path, pair_results: list[dict[str, Any]], summary:
     per_assignment_path = output_dir / "per_assignment.json"
     confusion_matrix_path = output_dir / "confusion_matrix.json"
     pair_results_path = output_dir / "pair_results.json"
+    threshold_graph_path = output_dir / "threshold_sweep.svg"
+    score_distribution_path = output_dir / "score_distribution.svg"
+    per_assignment_graph_path = output_dir / "per_assignment_metrics.svg"
+    artifacts = {
+        "summary_json": summary_path,
+        "summary_text": summary_text_path,
+        "threshold_sweep_csv": threshold_sweep_path,
+        "per_assignment_json": per_assignment_path,
+        "confusion_matrix_json": confusion_matrix_path,
+        "pair_results_json": pair_results_path,
+        "threshold_sweep_graph": threshold_graph_path,
+        "score_distribution_graph": score_distribution_path,
+        "per_assignment_graph": per_assignment_graph_path,
+    }
 
     summary_json = {key: value for key, value in summary.items() if not key.startswith("_")}
+    summary_json["artifacts"] = {
+        name: str(path.resolve()) for name, path in artifacts.items()
+    }
     summary_path.write_text(json.dumps(summary_json, indent=2), encoding="utf-8")
-    summary_text_path.write_text(render_summary(summary), encoding="utf-8")
+    summary_text_path.write_text(render_summary(summary, artifacts), encoding="utf-8")
     per_assignment_path.write_text(json.dumps(summary["per_assignment"], indent=2), encoding="utf-8")
     pair_results_path.write_text(json.dumps(pair_results, indent=2), encoding="utf-8")
 
@@ -530,37 +583,291 @@ def write_outputs(output_dir: Path, pair_results: list[dict[str, Any]], summary:
             for row in summary["_threshold_sweeps"][score_field]:
                 writer.writerow(row)
 
+    preferred_score_field = summary["preferred_review_signal"]["score_field"]
+    threshold_graph_path.write_text(
+        build_threshold_sweep_svg(summary["_threshold_sweeps"][preferred_score_field], preferred_score_field),
+        encoding="utf-8",
+    )
+    score_distribution_path.write_text(
+        build_score_distribution_svg(
+            summary["_pair_results"],
+            preferred_score_field,
+            summary["preferred_review_signal"]["recommended_review_threshold"]["threshold"],
+        ),
+        encoding="utf-8",
+    )
+    per_assignment_graph_path.write_text(
+        build_per_assignment_svg(summary["per_assignment"]),
+        encoding="utf-8",
+    )
 
-def render_summary(summary: dict[str, Any]) -> str:
+    return artifacts
+
+
+def render_summary(summary: dict[str, Any], artifacts: dict[str, Path] | None = None) -> str:
     preferred = summary["preferred_review_signal"]
     threshold = preferred["recommended_review_threshold"]
-    return "\n".join(
+    lines = [
+        "C Engine Benchmark Summary",
+        f"Dataset root: {summary['dataset']['root']}",
+        (
+            "Pairs: "
+            f"{summary['execution']['scored_pairs']} scored / "
+            f"{summary['execution']['total_pairs']} total"
+        ),
+        (
+            "Preferred review signal: "
+            f"{preferred['score_field']} (engine primary is {preferred['engine_primary_score_field']})"
+        ),
+        (
+            "Recommended provisional review threshold: "
+            f"{threshold['threshold']:.2f} on {preferred['score_field']}"
+        ),
+        (
+            "At that threshold: "
+            f"precision={format_metric(threshold['precision'])} "
+            f"recall={format_metric(threshold['recall'])} "
+            f"fpr={format_metric(threshold['fpr'])} "
+            f"fnr={format_metric(threshold['fnr'])}"
+        ),
+        "Validity: synthetic historical-like benchmark only; threshold is for human review triage, not guilt.",
+    ]
+    if artifacts:
+        lines.append("Results saved to:")
+        for path in artifacts.values():
+            lines.append(f"- {path.resolve()}")
+    return "\n".join(lines)
+
+
+def build_threshold_sweep_svg(sweep: list[dict[str, Any]], score_field: str) -> str:
+    width = 960
+    height = 540
+    margin_left = 70
+    margin_right = 30
+    margin_top = 60
+    margin_bottom = 70
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    threshold_to_x = lambda value: margin_left + (value * plot_width)
+    metric_to_y = lambda value: margin_top + ((1.0 - value) * plot_height)
+    series = [
+        ("precision", "#1f77b4"),
+        ("recall", "#2ca02c"),
+        ("fpr", "#d62728"),
+        ("fnr", "#9467bd"),
+    ]
+
+    svg_lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        f'<text x="{width / 2}" y="30" text-anchor="middle" font-size="22" font-family="Segoe UI, Arial, sans-serif" fill="#1a1a1a">Threshold Sweep ({html.escape(score_field)})</text>',
+        f'<text x="{width / 2}" y="52" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#555">Precision, recall, false positive rate, and false negative rate across thresholds</text>',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{margin_left + plot_width}" y2="{margin_top + plot_height}" stroke="#333" stroke-width="1.5"/>',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" stroke="#333" stroke-width="1.5"/>',
+    ]
+
+    for tick in range(0, 11):
+        value = tick / 10
+        x = threshold_to_x(value)
+        y = metric_to_y(value)
+        svg_lines.append(
+            f'<line x1="{x:.2f}" y1="{margin_top}" x2="{x:.2f}" y2="{margin_top + plot_height}" stroke="#e5e5e5" stroke-width="1"/>'
+        )
+        svg_lines.append(
+            f'<line x1="{margin_left}" y1="{y:.2f}" x2="{margin_left + plot_width}" y2="{y:.2f}" stroke="#e5e5e5" stroke-width="1"/>'
+        )
+        svg_lines.append(
+            f'<text x="{x:.2f}" y="{margin_top + plot_height + 24}" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">{value:.1f}</text>'
+        )
+        svg_lines.append(
+            f'<text x="{margin_left - 10}" y="{y + 4:.2f}" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">{value:.1f}</text>'
+        )
+
+    legend_x = width - 230
+    legend_y = 90
+    for index, (metric_name, color) in enumerate(series):
+        y = legend_y + (index * 22)
+        svg_lines.append(f'<line x1="{legend_x}" y1="{y}" x2="{legend_x + 26}" y2="{y}" stroke="{color}" stroke-width="3"/>')
+        svg_lines.append(
+            f'<text x="{legend_x + 34}" y="{y + 4}" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">{metric_name}</text>'
+        )
+
+    for metric_name, color in series:
+        points = []
+        for row in sweep:
+            metric_value = row[metric_name]
+            if metric_value is None:
+                continue
+            points.append(f"{threshold_to_x(row['threshold']):.2f},{metric_to_y(metric_value):.2f}")
+        if points:
+            svg_lines.append(
+                f'<polyline fill="none" stroke="{color}" stroke-width="3" points="{" ".join(points)}"/>'
+            )
+
+    svg_lines.extend(
         [
-            "C Engine Benchmark Summary",
-            f"Dataset root: {summary['dataset']['root']}",
-            (
-                "Pairs: "
-                f"{summary['execution']['scored_pairs']} scored / "
-                f"{summary['execution']['total_pairs']} total"
-            ),
-            (
-                "Preferred review signal: "
-                f"{preferred['score_field']} (engine primary is {preferred['engine_primary_score_field']})"
-            ),
-            (
-                "Recommended provisional review threshold: "
-                f"{threshold['threshold']:.2f} on {preferred['score_field']}"
-            ),
-            (
-                "At that threshold: "
-                f"precision={format_metric(threshold['precision'])} "
-                f"recall={format_metric(threshold['recall'])} "
-                f"fpr={format_metric(threshold['fpr'])} "
-                f"fnr={format_metric(threshold['fnr'])}"
-            ),
-            "Validity: synthetic historical-like benchmark only; threshold is for human review triage, not guilt.",
+            f'<text x="{width / 2}" y="{height - 18}" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Threshold</text>',
+            f'<text x="18" y="{height / 2}" transform="rotate(-90 18 {height / 2})" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Metric value</text>',
+            "</svg>",
         ]
     )
+    return "\n".join(svg_lines)
+
+
+def build_score_distribution_svg(
+    pair_results: list[dict[str, Any]],
+    score_field: str,
+    threshold: float,
+) -> str:
+    width = 960
+    height = 540
+    margin_left = 90
+    margin_right = 30
+    margin_top = 60
+    margin_bottom = 120
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    sorted_pairs = sorted(pair_results, key=lambda pair: pair[score_field], reverse=True)
+    step = plot_width / max(len(sorted_pairs), 1)
+    value_to_y = lambda value: margin_top + ((1.0 - value) * plot_height)
+    label_colors = {
+        True: "#2ca02c",
+        False: "#d62728",
+    }
+
+    svg_lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        f'<text x="{width / 2}" y="30" text-anchor="middle" font-size="22" font-family="Segoe UI, Arial, sans-serif" fill="#1a1a1a">Pair Score Distribution ({html.escape(score_field)})</text>',
+        f'<text x="{width / 2}" y="52" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#555">Each point is one labeled benchmark pair; green should flag, red should not flag</text>',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{margin_left + plot_width}" y2="{margin_top + plot_height}" stroke="#333" stroke-width="1.5"/>',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" stroke="#333" stroke-width="1.5"/>',
+    ]
+
+    for tick in range(0, 11):
+        value = tick / 10
+        y = value_to_y(value)
+        svg_lines.append(
+            f'<line x1="{margin_left}" y1="{y:.2f}" x2="{margin_left + plot_width}" y2="{y:.2f}" stroke="#e5e5e5" stroke-width="1"/>'
+        )
+        svg_lines.append(
+            f'<text x="{margin_left - 10}" y="{y + 4:.2f}" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">{value:.1f}</text>'
+        )
+
+    threshold_y = value_to_y(threshold)
+    svg_lines.append(
+        f'<line x1="{margin_left}" y1="{threshold_y:.2f}" x2="{margin_left + plot_width}" y2="{threshold_y:.2f}" stroke="#ff7f0e" stroke-width="2" stroke-dasharray="8 6"/>'
+    )
+    svg_lines.append(
+        f'<text x="{margin_left + plot_width - 4}" y="{threshold_y - 8:.2f}" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#ff7f0e">threshold = {threshold:.2f}</text>'
+    )
+
+    for index, pair in enumerate(sorted_pairs):
+        x = margin_left + (index + 0.5) * step
+        y = value_to_y(pair[score_field])
+        color = label_colors[pair["should_flag_for_review"]]
+        svg_lines.append(
+            f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="{color}" stroke="#ffffff" stroke-width="1.5"/>'
+        )
+        svg_lines.append(
+            f'<text x="{x:.2f}" y="{margin_top + plot_height + 20}" transform="rotate(45 {x:.2f} {margin_top + plot_height + 20})" font-size="10" font-family="Segoe UI, Arial, sans-serif" fill="#444">{html.escape(pair["pair_id"])}</text>'
+        )
+
+    legend_x = width - 230
+    legend_y = height - 70
+    svg_lines.append(f'<circle cx="{legend_x}" cy="{legend_y}" r="6" fill="#2ca02c"/>')
+    svg_lines.append(
+        f'<text x="{legend_x + 14}" y="{legend_y + 4}" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">should flag for review</text>'
+    )
+    svg_lines.append(f'<circle cx="{legend_x}" cy="{legend_y + 24}" r="6" fill="#d62728"/>')
+    svg_lines.append(
+        f'<text x="{legend_x + 14}" y="{legend_y + 28}" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">should not flag</text>'
+    )
+
+    svg_lines.extend(
+        [
+            f'<text x="{width / 2}" y="{height - 18}" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Benchmark pairs sorted by score</text>',
+            f'<text x="18" y="{height / 2}" transform="rotate(-90 18 {height / 2})" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Score</text>',
+            "</svg>",
+        ]
+    )
+    return "\n".join(svg_lines)
+
+
+def build_per_assignment_svg(per_assignment: dict[str, Any]) -> str:
+    width = 960
+    height = 540
+    margin_left = 80
+    margin_right = 30
+    margin_top = 60
+    margin_bottom = 110
+    plot_width = width - margin_left - margin_right
+    plot_height = height - margin_top - margin_bottom
+    assignments = list(per_assignment.items())
+    metric_names = [
+        ("precision", "#1f77b4"),
+        ("recall", "#2ca02c"),
+        ("fpr", "#d62728"),
+    ]
+    assignment_width = plot_width / max(len(assignments), 1)
+    group_width = min(90, assignment_width * 0.7)
+    bar_width = group_width / len(metric_names)
+    value_to_y = lambda value: margin_top + ((1.0 - value) * plot_height)
+
+    svg_lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        f'<text x="{width / 2}" y="30" text-anchor="middle" font-size="22" font-family="Segoe UI, Arial, sans-serif" fill="#1a1a1a">Per-Assignment Metrics</text>',
+        f'<text x="{width / 2}" y="52" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#555">Precision, recall, and false positive rate at the selected review threshold</text>',
+        f'<line x1="{margin_left}" y1="{margin_top + plot_height}" x2="{margin_left + plot_width}" y2="{margin_top + plot_height}" stroke="#333" stroke-width="1.5"/>',
+        f'<line x1="{margin_left}" y1="{margin_top}" x2="{margin_left}" y2="{margin_top + plot_height}" stroke="#333" stroke-width="1.5"/>',
+    ]
+
+    for tick in range(0, 11):
+        value = tick / 10
+        y = value_to_y(value)
+        svg_lines.append(
+            f'<line x1="{margin_left}" y1="{y:.2f}" x2="{margin_left + plot_width}" y2="{y:.2f}" stroke="#e5e5e5" stroke-width="1"/>'
+        )
+        svg_lines.append(
+            f'<text x="{margin_left - 10}" y="{y + 4:.2f}" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">{value:.1f}</text>'
+        )
+
+    legend_x = width - 250
+    legend_y = 90
+    for index, (metric_name, color) in enumerate(metric_names):
+        y = legend_y + (index * 22)
+        svg_lines.append(f'<rect x="{legend_x}" y="{y - 10}" width="18" height="12" fill="{color}"/>')
+        svg_lines.append(
+            f'<text x="{legend_x + 28}" y="{y}" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">{metric_name}</text>'
+        )
+
+    for index, (assignment_id, assignment_data) in enumerate(assignments):
+        metrics = assignment_data["metrics"]
+        base_x = margin_left + (index * assignment_width) + ((assignment_width - group_width) / 2)
+        for metric_index, (metric_name, color) in enumerate(metric_names):
+            metric_value = metrics[metric_name]
+            if metric_value is None:
+                metric_value = 0.0
+            x = base_x + (metric_index * bar_width)
+            y = value_to_y(metric_value)
+            bar_height = (margin_top + plot_height) - y
+            svg_lines.append(
+                f'<rect x="{x:.2f}" y="{y:.2f}" width="{bar_width - 4:.2f}" height="{bar_height:.2f}" fill="{color}" opacity="0.9"/>'
+            )
+        label_x = margin_left + (index * assignment_width) + (assignment_width / 2)
+        svg_lines.append(
+            f'<text x="{label_x:.2f}" y="{margin_top + plot_height + 28}" text-anchor="middle" font-size="11" font-family="Segoe UI, Arial, sans-serif" fill="#444">{html.escape(assignment_id)}</text>'
+        )
+
+    svg_lines.extend(
+        [
+            f'<text x="{width / 2}" y="{height - 18}" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Assignment group</text>',
+            f'<text x="18" y="{height / 2}" transform="rotate(-90 18 {height / 2})" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Metric value</text>',
+            "</svg>",
+        ]
+    )
+    return "\n".join(svg_lines)
 
 
 def safe_divide(numerator: int, denominator: int) -> float | None:

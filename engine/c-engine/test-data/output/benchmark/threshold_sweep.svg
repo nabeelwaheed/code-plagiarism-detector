@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="480.0" y="30" text-anchor="middle" font-size="22" font-family="Segoe UI, Arial, sans-serif" fill="#1a1a1a">Threshold Sweep (score_secondary)</text>
+<text x="480.0" y="52" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#555">Precision, recall, false positive rate, and false negative rate across thresholds</text>
+<line x1="70" y1="470" x2="930" y2="470" stroke="#333" stroke-width="1.5"/>
+<line x1="70" y1="60" x2="70" y2="470" stroke="#333" stroke-width="1.5"/>
+<line x1="70.00" y1="60" x2="70.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="470.00" x2="930" y2="470.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="70.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.0</text>
+<text x="60" y="474.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.0</text>
+<line x1="156.00" y1="60" x2="156.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="429.00" x2="930" y2="429.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="156.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.1</text>
+<text x="60" y="433.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.1</text>
+<line x1="242.00" y1="60" x2="242.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="388.00" x2="930" y2="388.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="242.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.2</text>
+<text x="60" y="392.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.2</text>
+<line x1="328.00" y1="60" x2="328.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="347.00" x2="930" y2="347.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="328.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.3</text>
+<text x="60" y="351.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.3</text>
+<line x1="414.00" y1="60" x2="414.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="306.00" x2="930" y2="306.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="414.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.4</text>
+<text x="60" y="310.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.4</text>
+<line x1="500.00" y1="60" x2="500.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="265.00" x2="930" y2="265.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="500.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.5</text>
+<text x="60" y="269.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.5</text>
+<line x1="586.00" y1="60" x2="586.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="224.00" x2="930" y2="224.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="586.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.6</text>
+<text x="60" y="228.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.6</text>
+<line x1="672.00" y1="60" x2="672.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="183.00" x2="930" y2="183.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="672.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.7</text>
+<text x="60" y="187.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.7</text>
+<line x1="758.00" y1="60" x2="758.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="142.00" x2="930" y2="142.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="758.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.8</text>
+<text x="60" y="146.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.8</text>
+<line x1="844.00" y1="60" x2="844.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="101.00" x2="930" y2="101.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="844.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.9</text>
+<text x="60" y="105.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">0.9</text>
+<line x1="930.00" y1="60" x2="930.00" y2="470" stroke="#e5e5e5" stroke-width="1"/>
+<line x1="70" y1="60.00" x2="930" y2="60.00" stroke="#e5e5e5" stroke-width="1"/>
+<text x="930.00" y="494" text-anchor="middle" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">1.0</text>
+<text x="60" y="64.00" text-anchor="end" font-size="12" font-family="Segoe UI, Arial, sans-serif" fill="#444">1.0</text>
+<line x1="730" y1="90" x2="756" y2="90" stroke="#1f77b4" stroke-width="3"/>
+<text x="764" y="94" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">precision</text>
+<line x1="730" y1="112" x2="756" y2="112" stroke="#2ca02c" stroke-width="3"/>
+<text x="764" y="116" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">recall</text>
+<line x1="730" y1="134" x2="756" y2="134" stroke="#d62728" stroke-width="3"/>
+<text x="764" y="138" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">fpr</text>
+<line x1="730" y1="156" x2="756" y2="156" stroke="#9467bd" stroke-width="3"/>
+<text x="764" y="160" font-size="13" font-family="Segoe UI, Arial, sans-serif" fill="#333">fnr</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="3" points="70.00,320.91 87.20,320.91 104.40,320.91 121.60,320.91 138.80,320.91 156.00,320.91 173.20,320.91 190.40,287.78 207.60,287.78 224.80,287.78 242.00,265.00 259.20,265.00 276.40,235.71 293.60,235.71 310.80,235.71 328.00,235.71 345.20,235.71 362.40,235.71 379.60,196.67 396.80,196.67 414.00,196.67 431.20,196.67 448.40,196.67 465.60,196.67 482.80,162.50 500.00,162.50 517.20,196.67 534.40,265.00 551.60,470.00 568.80,470.00 586.00,470.00 603.20,470.00 620.40,470.00 637.60,470.00 654.80,470.00 672.00,470.00 689.20,470.00 706.40,470.00"/>
+<polyline fill="none" stroke="#2ca02c" stroke-width="3" points="70.00,60.00 87.20,60.00 104.40,60.00 121.60,60.00 138.80,60.00 156.00,60.00 173.20,60.00 190.40,60.00 207.60,60.00 224.80,60.00 242.00,60.00 259.20,60.00 276.40,60.00 293.60,60.00 310.80,60.00 328.00,60.00 345.20,60.00 362.40,60.00 379.60,60.00 396.80,60.00 414.00,60.00 431.20,60.00 448.40,60.00 465.60,60.00 482.80,162.50 500.00,162.50 517.20,265.00 534.40,367.50 551.60,470.00 568.80,470.00 586.00,470.00 603.20,470.00 620.40,470.00 637.60,470.00 654.80,470.00 672.00,470.00 689.20,470.00 706.40,470.00 723.60,470.00 740.80,470.00 758.00,470.00 775.20,470.00 792.40,470.00 809.60,470.00 826.80,470.00 844.00,470.00 861.20,470.00 878.40,470.00 895.60,470.00 912.80,470.00 930.00,470.00"/>
+<polyline fill="none" stroke="#d62728" stroke-width="3" points="70.00,60.00 87.20,60.00 104.40,60.00 121.60,60.00 138.80,60.00 156.00,60.00 173.20,60.00 190.40,177.14 207.60,177.14 224.80,177.14 242.00,235.71 259.20,235.71 276.40,294.29 293.60,294.29 310.80,294.29 328.00,294.29 345.20,294.29 362.40,294.29 379.60,352.86 396.80,352.86 414.00,352.86 431.20,352.86 448.40,352.86 465.60,352.86 482.80,411.43 500.00,411.43 517.20,411.43 534.40,411.43 551.60,411.43 568.80,411.43 586.00,411.43 603.20,411.43 620.40,411.43 637.60,411.43 654.80,411.43 672.00,411.43 689.20,411.43 706.40,411.43 723.60,470.00 740.80,470.00 758.00,470.00 775.20,470.00 792.40,470.00 809.60,470.00 826.80,470.00 844.00,470.00 861.20,470.00 878.40,470.00 895.60,470.00 912.80,470.00 930.00,470.00"/>
+<polyline fill="none" stroke="#9467bd" stroke-width="3" points="70.00,470.00 87.20,470.00 104.40,470.00 121.60,470.00 138.80,470.00 156.00,470.00 173.20,470.00 190.40,470.00 207.60,470.00 224.80,470.00 242.00,470.00 259.20,470.00 276.40,470.00 293.60,470.00 310.80,470.00 328.00,470.00 345.20,470.00 362.40,470.00 379.60,470.00 396.80,470.00 414.00,470.00 431.20,470.00 448.40,470.00 465.60,470.00 482.80,367.50 500.00,367.50 517.20,265.00 534.40,162.50 551.60,60.00 568.80,60.00 586.00,60.00 603.20,60.00 620.40,60.00 637.60,60.00 654.80,60.00 672.00,60.00 689.20,60.00 706.40,60.00 723.60,60.00 740.80,60.00 758.00,60.00 775.20,60.00 792.40,60.00 809.60,60.00 826.80,60.00 844.00,60.00 861.20,60.00 878.40,60.00 895.60,60.00 912.80,60.00 930.00,60.00"/>
+<text x="480.0" y="522" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Threshold</text>
+<text x="18" y="270.0" transform="rotate(-90 18 270.0)" text-anchor="middle" font-size="14" font-family="Segoe UI, Arial, sans-serif" fill="#333">Metric value</text>
+</svg>
