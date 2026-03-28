@@ -31,6 +31,16 @@ class EnrollmentController {
         );
         res.json({ message: "User successfully removed from course" });
     }
+
+    getRoster = async (req, res) => {
+        try {
+            const { courseId } = req.params;
+            const roster = await enrollmentService.getCourseRoster(courseId);
+            res.status(200).json(roster);
+        } catch (error) {
+            res.status(500).json({ error: "Failed to fetch course roster"});
+        }
+    };
 }
 
 module.exports = new EnrollmentController();

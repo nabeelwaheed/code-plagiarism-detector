@@ -1,15 +1,20 @@
 const express = require('express');
 const fileUpload = require('express-fileupload');
+const cors = require('cors'); //Added for server communication
 const app = express();
 const routes = require('./src/routes'); 
 
-const path = require('path') //Testing Backend using mock UI
+//const path = require('path') //Testing Backend using mock UI
+app.use(cors({
+    origin: 'http://localhost:3001',
+    credentials: true
+}));
 
 app.use(express.json()); 
 app.use(fileUpload());   
 app.use('/api', routes);
 
-app.use(express.static(path.join(__dirname,'public'))); //Testing Backend using mock UI
+//app.use(express.static(path.join(__dirname,'public'))); //Testing Backend using mock UI
 
 const PORT = 3000;
 app.listen(PORT, () => {

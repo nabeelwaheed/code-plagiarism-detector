@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public."AssignmentTemplate"
     CONSTRAINT "Template_pkey" PRIMARY KEY (id),
     CONSTRAINT assignment_version UNIQUE (assignment_id, version),
     CONSTRAINT "Assignment_id_fkey" FOREIGN KEY (assignment_id)
-        REFERENCES public."Assignment" (id) ON UPDATE CASCADE ON DELETE RESTRICT,
+        REFERENCES public."Assignment" (id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS public."Submission"
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS public."AnalysisJob"
 (
     id uuid NOT NULL,
     assignment_id uuid NOT NULL,
-    template_version_id uuid NOT NULL,
+    template_version_id uuid,
     status character varying(50) NOT NULL,
     params jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS public."AnalysisJob"
 
 CREATE TABLE IF NOT EXISTS public."SimilarityPair"
 (
-    id bigint NOT NULL,
+    id bigserial NOT NULL,
     job_id uuid NOT NULL,
     sub_a_id uuid NOT NULL,
     sub_b_id uuid NOT NULL,
@@ -100,14 +100,14 @@ CREATE TABLE IF NOT EXISTS public."SimilarityPair"
     CONSTRAINT "Job_id_fkey" FOREIGN KEY (job_id)
         REFERENCES public."AnalysisJob" (id) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT "Sub_a_id_fkey" FOREIGN KEY (sub_a_id)
-        REFERENCES public."AssignmentTemplate" (id) ON UPDATE CASCADE ON DELETE CASCADE,
+        REFERENCES public."Submission" (id) ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT "Sub_b_id_fkey" FOREIGN KEY (sub_b_id)
         REFERENCES public."Submission" (id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS public."EvidenceSpan"
 (
-    id bigint NOT NULL,
+    id bigserial NOT NULL,
     pair_id bigint NOT NULL,
     start_line integer NOT NULL,
     end_line integer NOT NULL,

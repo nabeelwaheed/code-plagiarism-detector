@@ -18,43 +18,25 @@
     {
       "a_id": "template",
       "b_id": "student",
-      "score_primary": 0.9736842105263158,
-      "score_secondary": 0.9965075669383003,
+      "score_primary": 0.045454545454545456,
+      "score_secondary": 0.1951219512195122,
       "matches": [
         {
           "a": {
-            "byte_start": 21,
-            "byte_end": 1063,
-            "line_start": 2,
+            "byte_start": 40,
+            "byte_end": 111,
+            "line_start": 3,
             "col_start": 1,
-            "line_end": 44,
-            "col_end": 10
+            "line_end": 7,
+            "col_end": 17
           },
           "b": {
             "byte_start": 21,
-            "byte_end": 1161,
+            "byte_end": 84,
             "line_start": 2,
             "col_start": 1,
-            "line_end": 44,
-            "col_end": 10
-          }
-        },
-        {
-          "a": {
-            "byte_start": 1072,
-            "byte_end": 1673,
-            "line_start": 44,
-            "col_start": 20,
-            "line_end": 73,
-            "col_end": 1
-          },
-          "b": {
-            "byte_start": 1162,
-            "byte_end": 1794,
-            "line_start": 44,
-            "col_start": 12,
-            "line_end": 73,
-            "col_end": 1
+            "line_end": 6,
+            "col_end": 13
           }
         }
       ]

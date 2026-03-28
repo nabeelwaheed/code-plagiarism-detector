@@ -17,9 +17,10 @@ router.post('/courses',requireAuth,courseController.create); //Added requireAuth
 router.get('/courses',courseController.getAllCourses); //Added another route for getting all courses
 router.patch('/courses/:id/status', courseController.updateStatus);
 
-router.get('/enrollments/my-courses', enrollmentController.getMyCourses);
+router.get('/enrollments/my-courses',requireAuth,enrollmentController.getMyCourses);
 router.post('/courses/:courseId/enroll',requireAuth,enrollmentController.enroll); //Added requireAuth
 router.delete('/courses/:courseId/enroll/:userId', enrollmentController.remove);
+router.get('/courses/:courseId/roster',requireAuth,enrollmentController.getRoster); //Added another route
 
 router.post('/courses/:courseId/assignments',requireAuth,assignmentController.create); //Added requireAuth
 router.get('/courses/:courseId/assignments',requireAuth,assignmentController.list); //Added requireAuth
@@ -34,6 +35,10 @@ router.get('/courses/:courseId/assignments/:assignmentId/template',assignmentCon
 router.delete('/courses/:courseId/assignments/:assignmentId/submit', assignmentController.deleteSubmission);
 
 router.post('/courses/:courseId/assignments/:assignmentId/analyze',requireAuth,analysisController.trigger); //Added requireAuth
+router.post('/courses/:courseId/assignments/:assignmentId/analyze',requireAuth,analysisController.runBatchAnalysis); //Added route
+router.post('/courses/:courseId/assignments/:assignmentId/compare',requireAuth,analysisController.runDirectCompare); //Added route
 router.get('/analysis/jobs/:jobId', analysisController.getResults);
+router.get('/analysis/jobs',analysisController.getAllJobs);
+router.get('/analysis/jobs/:jobId/pairs/:pairId',analysisController.getPairDetails);
 
 module.exports = router;

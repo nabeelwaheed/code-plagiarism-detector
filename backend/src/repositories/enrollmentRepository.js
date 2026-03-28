@@ -39,6 +39,17 @@ class EnrollmentRepository {
         if (result.rows.length===0) {return null;} //Checks if not enrolled yet
 		return result.rows[0].role;
 	}
+
+    async getAllUsersEnrolled(courseId) { //Added getAllUsersEnrolled
+        let sql = `
+            SELECT u.id, u.email, u.name, e.role
+            FROM public."Enrollment" e
+            JOIN public."User" u ON  e.user_id = u.id
+            WHERE e.course_id = $1
+            ORDER BY e.role ASC, u.email ASC;`;
+        let result = await db.query(sql, [courseId]);
+        return result.rows;
+    }
 }
 
 module.exports = new EnrollmentRepository();

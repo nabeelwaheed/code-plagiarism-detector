@@ -25,6 +25,9 @@ class EnrollmentService {
         await enrollmentRepository.remove(courseId, targetUserId);
     }
 	
+    async getCourseRoster(courseId) { //Added new function here
+        return await enrollmentRepository.getAllUsersEnrolled(courseId);
+    }
 }
 
 module.exports = new EnrollmentService();

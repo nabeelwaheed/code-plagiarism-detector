@@ -17,6 +17,12 @@ class AssignmentRepository {
         return result.rows;
     }
 
+    async getAssignmentById(id) {
+        let sql = `SELECT * FROM public."Assignment" WHERE id = $1`;
+        let result = await db.query(sql, [id]);
+        return result.rows[0];
+    }
+
     async delete(id) {
         await db.query(`DELETE FROM public."Assignment" WHERE id = $1`, [id]);
     }
@@ -84,6 +90,12 @@ class AssignmentRepository {
     async getAllSubmissions() { //Added all submission getter function
         let sql = `SELECT * FROM public."Submission"`;
         let result = await db.query(sql);
+        return result.rows;
+    }
+
+    async getSubmissionsByAssignmentId(assignmentId) {
+        let sql = `SELECT * FROM public."Submission" WHERE assignment_id = $1`;
+        let result = await db.query(sql, [assignmentId]);
         return result.rows;
     }
 }
