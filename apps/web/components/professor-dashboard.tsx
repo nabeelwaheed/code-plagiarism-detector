@@ -10,7 +10,10 @@ export function ProfessorDashboard() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState<"java" | "c" | "cpp">("java");
-  const [copiedAssignmentId, setCopiedAssignmentId] = useState<string | null>(null);
+  const [copyFeedback, setCopyFeedback] = useState<{
+    assignmentId: string;
+    status: "copied" | "failed";
+  } | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const logoutMutation = useLogoutMutation();
   const session = currentUserQuery.data ?? null;
@@ -50,13 +53,28 @@ export function ProfessorDashboard() {
 
     try {
       await navigator.clipboard.writeText(key);
-      setCopiedAssignmentId(assignmentId);
-      window.setTimeout(() => {
-        setCopiedAssignmentId((current) => (current === assignmentId ? null : current));
-      }, 1500);
     } catch {
-      setCopiedAssignmentId(null);
+      try {
+        copyWithDocumentFallback(key);
+      } catch {
+        setCopyFeedback({
+          assignmentId,
+          status: "failed",
+        });
+        window.setTimeout(() => {
+          setCopyFeedback((current) => (current?.assignmentId === assignmentId ? null : current));
+        }, 1500);
+        return;
+      }
     }
+
+    setCopyFeedback({
+      assignmentId,
+      status: "copied",
+    });
+    window.setTimeout(() => {
+      setCopyFeedback((current) => (current?.assignmentId === assignmentId ? null : current));
+    }, 1500);
   };
 
   if (!session) {
@@ -160,7 +178,11 @@ export function ProfessorDashboard() {
                     onClick={() => void handleCopyKey(assignment.id, assignment.activeKey)}
                     type="button"
                   >
-                    {copiedAssignmentId === assignment.id ? "Copied" : "Copy"}
+                    {copyFeedback?.assignmentId === assignment.id
+                      ? copyFeedback.status === "copied"
+                        ? "Copied"
+                        : "Copy failed"
+                      : "Copy"}
                   </button>
                 </div>
               </div>
@@ -183,4 +205,22 @@ export function ProfessorDashboard() {
       </section>
     </div>
   );
+}
+
+function copyWithDocumentFallback(value: string) {
+  const textArea = document.createElement("textarea");
+  textArea.value = value;
+  textArea.setAttribute("readonly", "");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textArea);
+
+  if (!copied) {
+    throw new Error("copy command failed");
+  }
 }
