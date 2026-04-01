@@ -10,3 +10,8 @@ dist/
 
 # misc
 .DS_Store
+
+engine/c-engine/target/debug
+
+__pycache__/
+*.py[cod]
