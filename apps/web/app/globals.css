@@ -1,0 +1,270 @@
+:root {
+  --bg: #f5f1e8;
+  --panel: #fffaf0;
+  --ink: #1e2430;
+  --accent: #0f766e;
+  --muted: #657084;
+  --border: #d9d2c0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.15), transparent 30%),
+    linear-gradient(180deg, #f7f2e9 0%, #efe6d3 100%);
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.page-shell {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 24px 0 56px;
+}
+
+.narrow-shell {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.page-stack {
+  display: grid;
+  gap: 20px;
+}
+
+.hero-card,
+.panel,
+.assignment-card,
+.stat-card {
+  background: rgba(255, 250, 240, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(30, 36, 48, 0.08);
+}
+
+.hero-card {
+  padding: 24px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.hero-card h1,
+.panel h2,
+.assignment-card h3 {
+  margin: 0 0 8px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.hero-actions,
+.hero-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.form-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.field input,
+.field select,
+input[type="file"] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fffdf7;
+}
+
+.primary-button,
+.secondary-button,
+.as-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.primary-button {
+  background: var(--accent);
+  color: white;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondary-button,
+.as-link {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.assignment-card {
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.assignment-card-top,
+.section-heading,
+.stats-row,
+.pair-table-head,
+.pair-table-row {
+  display: grid;
+  gap: 12px;
+}
+
+.assignment-card-top {
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.text-link {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.compact-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.error-text {
+  color: #b42318;
+}
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.stats-row {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.stat-card {
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.stat-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stat-card strong {
+  font-size: 1.6rem;
+}
+
+.pair-table {
+  display: grid;
+  gap: 8px;
+}
+
+.pair-table-head,
+.pair-table-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px 100px 80px;
+  align-items: center;
+}
+
+.pair-table-head {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pair-table-row {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(217, 210, 192, 0.6);
+}
+
+@media (max-width: 720px) {
+  .page-shell,
+  .narrow-shell {
+    width: min(100vw - 20px, 100%);
+  }
+
+  .hero-card {
+    flex-direction: column;
+  }
+
+  .pair-table-head,
+  .pair-table-row {
+    grid-template-columns: 1fr;
+  }
+}

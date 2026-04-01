@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PROFESSOR
+  STUDENT
+}
+
+enum AssignmentLanguage {
+  JAVA
+  C
+  CPP
+}
+
+enum UploadPurpose {
+  STUDENT_SUBMISSION
+  HISTORICAL_SUBMISSION
+  TEMPLATE_UPLOAD
+}
+
+enum UploadBatchStatus {
+  RECEIVED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum SubmissionKind {
+  CURRENT
+  HISTORICAL
+}
+
+enum ComparisonRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum MatchKind {
+  CODE
+  COMMENT
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  role           UserRole
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  assignments    Assignment[]
+  submissions    Submission[]
+  uploadBatches  UploadBatch[]
+  sessions       Session[]
+}
+
+model Assignment {
+  id                   String              @id @default(cuid())
+  title                String
+  language             AssignmentLanguage
+  professorId          String
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  professor            User                @relation(fields: [professorId], references: [id])
+  keys                 AssignmentKey[]
+  uploadBatches        UploadBatch[]
+  submissions          Submission[]
+  templateVersions     AssignmentTemplate[]
+  comparisonRuns       ComparisonRun[]
+}
+
+model AssignmentKey {
+  id            String      @id @default(cuid())
+  publicKey     String      @unique
+  assignmentId  String
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  assignment    Assignment  @relation(fields: [assignmentId], references: [id])
+}
+
+model UploadBatch {
+  id                String            @id @default(cuid())
+  assignmentId      String
+  uploaderId        String
+  purpose           UploadPurpose
+  status            UploadBatchStatus @default(RECEIVED)
+  originalObjectKey String
+  errorMessage      String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  assignment        Assignment        @relation(fields: [assignmentId], references: [id])
+  uploader          User              @relation(fields: [uploaderId], references: [id])
+  submissions       Submission[]
+  templateVersions  AssignmentTemplate[]
+}
+
+model Submission {
+  id                    String           @id @default(cuid())
+  assignmentId          String
+  uploadBatchId         String
+  ownerId               String?
+  displayName           String
+  kind                  SubmissionKind
+  concatenatedSource    String
+  sourceMapJson         Json
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  assignment            Assignment       @relation(fields: [assignmentId], references: [id])
+  uploadBatch           UploadBatch      @relation(fields: [uploadBatchId], references: [id])
+  owner                 User?            @relation(fields: [ownerId], references: [id])
+  files                 SubmissionFile[]
+  pairResultsAsLeft     PairResult[]     @relation("pair_left_submission")
+  pairResultsAsRight    PairResult[]     @relation("pair_right_submission")
+}
+
+model SubmissionFile {
+  id                 String      @id @default(cuid())
+  submissionId       String
+  relativePath       String
+  storageObjectKey   String
+  canonicalOrder     Int
+  byteStart          Int
+  byteEnd            Int
+  archivePath        String?
+  createdAt          DateTime    @default(now())
+  submission         Submission  @relation(fields: [submissionId], references: [id])
+}
+
+model AssignmentTemplate {
+  id                  String      @id @default(cuid())
+  assignmentId        String
+  uploadBatchId       String
+  versionNumber       Int
+  isActive            Boolean     @default(false)
+  concatenatedSource  String
+  sourceMapJson       Json
+  createdAt           DateTime    @default(now())
+  assignment          Assignment  @relation(fields: [assignmentId], references: [id])
+  uploadBatch         UploadBatch @relation(fields: [uploadBatchId], references: [id])
+  files               TemplateFile[]
+  comparisonRuns      ComparisonRun[]
+}
+
+model TemplateFile {
+  id                  String              @id @default(cuid())
+  assignmentTemplateId String
+  relativePath        String
+  storageObjectKey    String
+  canonicalOrder      Int
+  byteStart           Int
+  byteEnd             Int
+  archivePath         String?
+  createdAt           DateTime            @default(now())
+  assignmentTemplate  AssignmentTemplate  @relation(fields: [assignmentTemplateId], references: [id])
+}
+
+model ComparisonRun {
+  id                   String               @id @default(cuid())
+  assignmentId         String
+  templateVersionId    String?
+  status               ComparisonRunStatus  @default(QUEUED)
+  engineVersion        String
+  paramsJson           Json
+  startedAt            DateTime?
+  completedAt          DateTime?
+  errorMessage         String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  assignment           Assignment           @relation(fields: [assignmentId], references: [id])
+  templateVersion      AssignmentTemplate?  @relation(fields: [templateVersionId], references: [id])
+  pairResults          PairResult[]
+}
+
+model PairResult {
+  id                    String         @id @default(cuid())
+  comparisonRunId       String
+  leftSubmissionId      String
+  rightSubmissionId     String
+  similarityScore       Float
+  commentScore          Float?
+  matchedTokenCount     Int
+  sortOrder             Int
+  createdAt             DateTime       @default(now())
+  comparisonRun         ComparisonRun  @relation(fields: [comparisonRunId], references: [id])
+  leftSubmission        Submission     @relation("pair_left_submission", fields: [leftSubmissionId], references: [id])
+  rightSubmission       Submission     @relation("pair_right_submission", fields: [rightSubmissionId], references: [id])
+  matches               PairMatch[]
+}
+
+model PairMatch {
+  id                  String      @id @default(cuid())
+  pairResultId        String
+  matchKey            String
+  kind                MatchKind
+  leftByteStart       Int
+  leftByteEnd         Int
+  rightByteStart      Int
+  rightByteEnd        Int
+  leftLineStart       Int?
+  leftLineEnd         Int?
+  rightLineStart      Int?
+  rightLineEnd        Int?
+  leftTokenStart      Int?
+  leftTokenEnd        Int?
+  rightTokenStart     Int?
+  rightTokenEnd       Int?
+  createdAt           DateTime    @default(now())
+  pairResult          PairResult  @relation(fields: [pairResultId], references: [id])
+
+  @@unique([pairResultId, matchKey])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@similarity/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "@similarity/shared": "0.1.0",
+    "bullmq": "^5.0.0",
+    "fflate": "^0.8.2",
+    "ioredis": "^5.0.0"
+  }
+}

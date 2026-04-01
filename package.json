@@ -1,0 +1,28 @@
+{
+  "name": "similarity-app",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @similarity/shared && npm run build --workspace @similarity/api && npm run build --workspace @similarity/worker && npm run build --workspace @similarity/web",
+    "dev": "npm run dev --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "prisma:generate": "npx prisma generate --schema prisma/schema.prisma",
+    "db:migrate:dev": "npx prisma migrate dev --schema prisma/schema.prisma",
+    "db:migrate:deploy": "npx prisma migrate deploy --schema prisma/schema.prisma",
+    "db:seed": "node prisma/seed.mjs",
+    "db:bootstrap-admin": "node prisma/bootstrap-admin.mjs",
+    "db:reset:dev": "npx prisma migrate reset --force --schema prisma/schema.prisma",
+    "seed": "node prisma/seed.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3"
+  }
+}

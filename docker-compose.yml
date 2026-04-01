@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: similarity_app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/similarity_app?schema=public
+      REDIS_URL: redis://redis:6379
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      AUTH_COOKIE_SECURE: "false"
+      AUTH_COOKIE_SAME_SITE: lax
+      AUTH_SESSION_COOKIE_NAME: similarity_session
+      AUTH_SESSION_TTL_HOURS: "168"
+      OBJECT_STORAGE_ROOT: /app/var/object-storage
+      ENGINE_VERSION: 0.1.0
+      ENGINE_GST_MIN_MATCH_LENGTH: "8"
+      ENGINE_MINIMUM_COMMENT_LENGTH: "12"
+      UPLOAD_MAX_FILE_SIZE_MB: "50"
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "3001:3001"
+    volumes:
+      - object-storage:/app/var/object-storage
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/similarity_app?schema=public
+      REDIS_URL: redis://redis:6379
+      OBJECT_STORAGE_MODE: filesystem
+      OBJECT_STORAGE_ROOT: /app/var/object-storage
+      ENGINE_BINARY_PATH: /app/bin/engine-cli
+      ENGINE_VERSION: 0.1.0
+      ENGINE_GST_MIN_MATCH_LENGTH: "8"
+      ENGINE_MINIMUM_COMMENT_LENGTH: "12"
+      WORKER_UPLOAD_CONCURRENCY: "2"
+      WORKER_COMPARISON_CONCURRENCY: "1"
+      ARCHIVE_MAX_DEPTH: "8"
+      ARCHIVE_MAX_SOURCE_FILES: "2000"
+      ARCHIVE_MAX_EXPANDED_BYTES: "52428800"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - object-storage:/app/var/object-storage
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
+  redis-data:
+  object-storage:

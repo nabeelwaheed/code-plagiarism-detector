@@ -1,0 +1,537 @@
+use engine_contracts::{
+    AnalysisRequest, AnalysisResponse, MatchKind, MatchSpan, PairAnalysisResult, PairMatch,
+    PositionMetadata, SCHEMA_VERSION, SourceMapEntry, TokenMetadata,
+};
+use engine_gst::{run_gst, symmetric_coverage_score, Tile};
+use engine_language::{parse_submission, CommentToken, ParsedSubmission};
+use std::collections::HashMap;
+
+pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
+    validate_request(&request)?;
+
+    let AnalysisRequest {
+        schema_version: _,
+        engine_version,
+        language,
+        submissions,
+        template,
+        pairs,
+        params,
+    } = request;
+
+    let processed_template = match template {
+        Some(template) => Some(parse_submission(language, &template.source, template.source_map)?),
+        None => None,
+    };
+
+    let mut processed_submissions = HashMap::new();
+    for submission in submissions {
+        let processed = parse_submission(language, &submission.source, submission.source_map)?;
+        processed_submissions.insert(submission.submission_id, processed);
+    }
+
+    let mut pair_results = Vec::new();
+    for pair in pairs {
+        let left = processed_submissions
+            .get(&pair.left_submission_id)
+            .ok_or_else(|| format!("unknown left submission {}", pair.left_submission_id))?;
+        let right = processed_submissions
+            .get(&pair.right_submission_id)
+            .ok_or_else(|| format!("unknown right submission {}", pair.right_submission_id))?;
+
+        let left_mask = build_template_mask(left, processed_template.as_ref(), params.gst_min_match_length);
+        let right_mask = build_template_mask(right, processed_template.as_ref(), params.gst_min_match_length);
+
+        let gst_result = run_gst(
+            &left.normalized_tokens,
+            &right.normalized_tokens,
+            &left_mask,
+            &right_mask,
+            params.gst_min_match_length,
+        );
+
+        let mut matches = map_code_matches(left, right, &gst_result.tiles);
+        let (comment_matches, comment_score) =
+            compare_comments(left, right, params.minimum_comment_length, matches.len());
+        matches.extend(comment_matches);
+
+        let similarity_score = symmetric_coverage_score(
+            gst_result.matched_token_count,
+            left.normalized_tokens.len(),
+            right.normalized_tokens.len(),
+        );
+
+        pair_results.push(PairAnalysisResult {
+            pair_id: pair.pair_id,
+            left_submission_id: pair.left_submission_id,
+            right_submission_id: pair.right_submission_id,
+            similarity_score,
+            comment_score,
+            matched_token_count: gst_result.matched_token_count,
+            matches,
+        });
+    }
+
+    Ok(AnalysisResponse {
+        schema_version: SCHEMA_VERSION.to_string(),
+        engine_version,
+        language,
+        pair_results,
+    })
+}
+
+fn validate_request(request: &AnalysisRequest) -> Result<(), String> {
+    if request.schema_version != SCHEMA_VERSION {
+        return Err(format!("schema_version must be {SCHEMA_VERSION}"));
+    }
+
+    if request.engine_version.trim().is_empty() {
+        return Err("engine_version must be non-empty".to_string());
+    }
+
+    if request.submissions.is_empty() {
+        return Err("submissions must be non-empty".to_string());
+    }
+
+    if request.params.gst_min_match_length == 0 {
+        return Err("gst_min_match_length must be greater than zero".to_string());
+    }
+
+    if request.params.minimum_comment_length == 0 {
+        return Err("minimum_comment_length must be greater than zero".to_string());
+    }
+
+    let mut seen = HashMap::new();
+    for submission in &request.submissions {
+        if submission.submission_id.trim().is_empty() {
+            return Err("submission_id must be non-empty".to_string());
+        }
+
+        if seen.insert(&submission.submission_id, true).is_some() {
+            return Err(format!("duplicate submission_id {}", submission.submission_id));
+        }
+
+        validate_source_map(&submission.source, &submission.source_map)?;
+    }
+
+    if let Some(template) = &request.template {
+        validate_source_map(&template.source, &template.source_map)?;
+    }
+
+    for pair in &request.pairs {
+        if pair.left_submission_id == pair.right_submission_id {
+            return Err(format!("pair {} compares the same submission twice", pair.pair_id));
+        }
+        if !request
+            .submissions
+            .iter()
+            .any(|submission| submission.submission_id == pair.left_submission_id)
+        {
+            return Err(format!("pair {} has unknown left submission", pair.pair_id));
+        }
+        if !request
+            .submissions
+            .iter()
+            .any(|submission| submission.submission_id == pair.right_submission_id)
+        {
+            return Err(format!("pair {} has unknown right submission", pair.pair_id));
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_source_map(source: &str, entries: &[SourceMapEntry]) -> Result<(), String> {
+    let mut previous_end = 0usize;
+    for entry in entries {
+        if entry.file_path.trim().is_empty() {
+            return Err("source_map file_path must be non-empty".to_string());
+        }
+        if entry.byte_end < entry.byte_start {
+            return Err("source_map byte_end must be >= byte_start".to_string());
+        }
+        if entry.byte_end > source.len() {
+            return Err("source_map byte_end exceeds source length".to_string());
+        }
+        if entry.byte_start < previous_end {
+            return Err("source_map entries must not overlap".to_string());
+        }
+        previous_end = entry.byte_end;
+    }
+    Ok(())
+}
+
+fn build_template_mask(
+    submission: &ParsedSubmission,
+    template: Option<&ParsedSubmission>,
+    min_match_length: usize,
+) -> Vec<bool> {
+    let mut mask = vec![false; submission.normalized_tokens.len()];
+    let Some(template) = template else {
+        return mask;
+    };
+
+    let template_mask = vec![false; template.normalized_tokens.len()];
+    let gst_result = run_gst(
+        &submission.normalized_tokens,
+        &template.normalized_tokens,
+        &mask,
+        &template_mask,
+        min_match_length,
+    );
+
+    for tile in gst_result.tiles {
+        for offset in 0..tile.length {
+            mask[tile.left_start + offset] = true;
+        }
+    }
+
+    mask
+}
+
+fn map_code_matches(left: &ParsedSubmission, right: &ParsedSubmission, tiles: &[Tile]) -> Vec<PairMatch> {
+    let mut matches = Vec::new();
+
+    for (index, tile) in tiles.iter().enumerate() {
+        let left_start_token = tile.left_start;
+        let left_end_token = tile.left_start + tile.length - 1;
+        let right_start_token = tile.right_start;
+        let right_end_token = tile.right_start + tile.length - 1;
+
+        let left_start = left.code_tokens[left_start_token].byte_start;
+        let left_end = left.code_tokens[left_end_token].byte_end;
+        let right_start = right.code_tokens[right_start_token].byte_start;
+        let right_end = right.code_tokens[right_end_token].byte_end;
+
+        matches.push(PairMatch {
+            match_id: format!("code-{index}"),
+            kind: MatchKind::Code,
+            left: build_match_span(
+                left_start,
+                left_end,
+                left_start_token,
+                left_end_token,
+                &left.line_starts,
+                &left.source_map,
+            ),
+            right: build_match_span(
+                right_start,
+                right_end,
+                right_start_token,
+                right_end_token,
+                &right.line_starts,
+                &right.source_map,
+            ),
+            matched_token_count: tile.length,
+        });
+    }
+
+    matches
+}
+
+fn compare_comments(
+    left: &ParsedSubmission,
+    right: &ParsedSubmission,
+    minimum_comment_length: usize,
+    starting_index: usize,
+) -> (Vec<PairMatch>, Option<f64>) {
+    let mut matches = Vec::new();
+    let mut matched_count = 0usize;
+
+    for (left_index, left_comment) in left.comment_tokens.iter().enumerate() {
+        let normalized_left = normalize_comment(&left_comment.text);
+        if normalized_left.len() < minimum_comment_length {
+            continue;
+        }
+
+        for (right_index, right_comment) in right.comment_tokens.iter().enumerate() {
+            let normalized_right = normalize_comment(&right_comment.text);
+            if normalized_right.len() < minimum_comment_length || normalized_left != normalized_right {
+                continue;
+            }
+
+            let match_index = starting_index + matches.len();
+            matches.push(comment_match(
+                match_index,
+                left_index,
+                right_index,
+                left_comment,
+                right_comment,
+                &left.line_starts,
+                &left.source_map,
+                &right.line_starts,
+                &right.source_map,
+            ));
+            matched_count += 1;
+        }
+    }
+
+    let score = if left.comment_tokens.is_empty() && right.comment_tokens.is_empty() {
+        None
+    } else {
+        Some(symmetric_coverage_score(
+            matched_count,
+            left.comment_tokens.len(),
+            right.comment_tokens.len(),
+        ))
+    };
+
+    (matches, score)
+}
+
+fn comment_match(
+    match_index: usize,
+    left_index: usize,
+    right_index: usize,
+    left_comment: &CommentToken,
+    right_comment: &CommentToken,
+    left_line_starts: &[usize],
+    left_source_map: &[SourceMapEntry],
+    right_line_starts: &[usize],
+    right_source_map: &[SourceMapEntry],
+) -> PairMatch {
+    PairMatch {
+        match_id: format!("comment-{match_index}"),
+        kind: MatchKind::Comment,
+        left: build_match_span(
+            left_comment.byte_start,
+            left_comment.byte_end,
+            left_index,
+            left_index,
+            left_line_starts,
+            left_source_map,
+        ),
+        right: build_match_span(
+            right_comment.byte_start,
+            right_comment.byte_end,
+            right_index,
+            right_index,
+            right_line_starts,
+            right_source_map,
+        ),
+        matched_token_count: 1,
+    }
+}
+
+fn normalize_comment(comment: &str) -> String {
+    comment
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_ascii_lowercase()
+}
+
+fn build_match_span(
+    byte_start: usize,
+    byte_end: usize,
+    token_start: usize,
+    token_end: usize,
+    line_starts: &[usize],
+    source_map: &[SourceMapEntry],
+) -> MatchSpan {
+    MatchSpan {
+        byte_start,
+        byte_end,
+        file_path: lookup_file_path(source_map, byte_start, byte_end),
+        position: Some(position_from_bytes(line_starts, byte_start, byte_end)),
+        tokens: Some(TokenMetadata {
+            token_start,
+            token_end,
+        }),
+    }
+}
+
+fn lookup_file_path(source_map: &[SourceMapEntry], byte_start: usize, byte_end: usize) -> Option<String> {
+    source_map
+        .iter()
+        .find(|entry| byte_start >= entry.byte_start && byte_end <= entry.byte_end)
+        .map(|entry| entry.file_path.clone())
+}
+
+fn position_from_bytes(line_starts: &[usize], byte_start: usize, byte_end: usize) -> PositionMetadata {
+    let (line_start, column_start) = line_column(line_starts, byte_start);
+    let end_offset = byte_end.saturating_sub(1).max(byte_start);
+    let (line_end, column_end) = line_column(line_starts, end_offset);
+    PositionMetadata {
+        line_start,
+        column_start,
+        line_end,
+        column_end,
+    }
+}
+
+fn line_column(line_starts: &[usize], byte_offset: usize) -> (usize, usize) {
+    let line_index = match line_starts.binary_search(&byte_offset) {
+        Ok(index) => index,
+        Err(index) => index.saturating_sub(1),
+    };
+    let line_start = line_starts[line_index];
+    (line_index + 1, byte_offset.saturating_sub(line_start) + 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::analyze;
+    use engine_contracts::{
+        AnalysisLanguage, AnalysisPair, AnalysisParams, AnalysisRequest, AnalysisSubmission,
+        SourceMapEntry, TemplateSource, SCHEMA_VERSION, SubmissionKind,
+    };
+
+    #[test]
+    fn analyzes_java_pair_and_returns_byte_spans() {
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "class A { int add(int a, int b) { return a + b; } }\n".to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "class B { int sum(int x, int y) { return x + y; } }\n".to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        assert_eq!(response.pair_results.len(), 1);
+        let pair = &response.pair_results[0];
+        assert_eq!(pair.pair_id, "left__right");
+        assert!(pair.similarity_score > 0.0);
+        assert!(!pair.matches.is_empty());
+        assert!(pair.matches[0].left.byte_end > pair.matches[0].left.byte_start);
+        assert!(pair.matches[0].right.byte_end > pair.matches[0].right.byte_start);
+    }
+
+    #[test]
+    fn rejects_invalid_schema_version() {
+        let request = AnalysisRequest {
+            schema_version: "0.9".to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![AnalysisSubmission {
+                submission_id: "left".to_string(),
+                submission_kind: SubmissionKind::Current,
+                source: "class A {}\n".to_string(),
+                source_map: vec![],
+            }],
+            template: None,
+            pairs: vec![],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let error = analyze(request).expect_err("invalid schema should fail");
+        assert!(error.contains("schema_version"));
+    }
+
+    #[test]
+    fn template_subtraction_removes_template_only_match_signal() {
+        let template_source = "class Shared { int helper(int value) { return value + 1; } }\n";
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: template_source.to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: template_source.to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: Some(TemplateSource {
+                source: template_source.to_string(),
+                source_map: vec![],
+            }),
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        assert_eq!(pair.similarity_score, 0.0);
+        assert!(pair.matches.is_empty());
+    }
+
+    #[test]
+    fn source_map_file_path_is_returned_for_match_spans() {
+        let left_source = "int add(int a, int b) {\n  return a + b;\n}\n";
+        let right_source = "int sum(int x, int y) {\n  return x + y;\n}\n";
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::C,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: left_source.to_string(),
+                    source_map: vec![SourceMapEntry {
+                        file_path: "main.c".to_string(),
+                        byte_start: 0,
+                        byte_end: left_source.len(),
+                    }],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: right_source.to_string(),
+                    source_map: vec![SourceMapEntry {
+                        file_path: "main.c".to_string(),
+                        byte_start: 0,
+                        byte_end: right_source.len(),
+                    }],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        assert!(!pair.matches.is_empty());
+        assert_eq!(pair.matches[0].left.file_path.as_deref(), Some("main.c"));
+        assert_eq!(pair.matches[0].right.file_path.as_deref(), Some("main.c"));
+    }
+}

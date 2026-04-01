@@ -1,0 +1,11 @@
+node_modules
+apps/*/node_modules
+apps/*/.next
+apps/*/dist
+packages/*/dist
+engine/target
+var
+.env
+.env.*
+!.env.example
+current_engines

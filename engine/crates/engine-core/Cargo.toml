@@ -1,0 +1,11 @@
+[package]
+name = "engine-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+engine-contracts = { path = "../engine-contracts" }
+engine-gst = { path = "../engine-gst" }
+engine-language = { path = "../engine-language" }
+serde.workspace = true
+

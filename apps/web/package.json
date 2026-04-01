@@ -1,0 +1,21 @@
+{
+  "name": "@similarity/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.6.0",
+    "@similarity/shared": "0.1.0",
+    "@tanstack/react-query": "^5.0.0",
+    "monaco-editor": "^0.52.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0"
+  }
+}
