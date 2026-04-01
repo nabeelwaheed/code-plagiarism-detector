@@ -17,7 +17,7 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
   }
 
   if (pairQuery.error || !pairQuery.data) {
-    return <p className="panel error-text">{pairQuery.error?.message ?? "Pair not found"}</p>;
+    return <p className="panel error-text">{pairQuery.error?.message ?? "That suspicious pair no longer exists."}</p>;
   }
 
   const pair = pairQuery.data;

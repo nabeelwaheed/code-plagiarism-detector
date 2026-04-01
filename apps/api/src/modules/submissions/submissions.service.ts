@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { UploadPurpose } from "@prisma/client";
 import { createObjectKey, writeObjectBuffer } from "@similarity/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
@@ -26,10 +31,14 @@ export class SubmissionsService {
       },
     });
 
-    const assignment = await this.prisma.assignment.findUniqueOrThrow({
+    const assignment = await this.prisma.assignment.findUnique({
       where: { id: payload.assignmentId },
       select: { language: true },
     });
+
+    if (!assignment) {
+      throw new NotFoundException("That assignment no longer exists");
+    }
 
     await this.queueService.enqueueUploadPreparation({
       assignmentId: payload.assignmentId,
@@ -53,10 +62,14 @@ export class SubmissionsService {
     ensureProfessorUploadPurpose(payload.purpose);
     await this.assertProfessorOwnsAssignment(payload.assignmentId, payload.user.id);
 
-    const assignment = await this.prisma.assignment.findUniqueOrThrow({
+    const assignment = await this.prisma.assignment.findUnique({
       where: { id: payload.assignmentId },
       select: { language: true },
     });
+
+    if (!assignment) {
+      throw new NotFoundException("That assignment no longer exists");
+    }
 
     const objectKey = createObjectKey(
       `raw/${payload.assignmentId}/${payload.purpose}`,
@@ -85,7 +98,7 @@ export class SubmissionsService {
   }
 
   async createStudentSubmission(payload: CreateStudentSubmissionDto, user: AuthenticatedUser) {
-    const assignmentKey = await this.prisma.assignmentKey.findFirstOrThrow({
+    const assignmentKey = await this.prisma.assignmentKey.findFirst({
       where: {
         publicKey: payload.assignmentKey,
         isActive: true,
@@ -99,6 +112,10 @@ export class SubmissionsService {
         },
       },
     });
+
+    if (!assignmentKey) {
+      throw new BadRequestException("That assignment key is invalid or inactive");
+    }
 
     const uploadBatch = await this.prisma.uploadBatch.create({
       data: {
@@ -131,7 +148,7 @@ export class SubmissionsService {
   }) {
     ensureZipFileName(payload.fileName);
 
-    const assignmentKey = await this.prisma.assignmentKey.findFirstOrThrow({
+    const assignmentKey = await this.prisma.assignmentKey.findFirst({
       where: {
         publicKey: payload.assignmentKey,
         isActive: true,
@@ -145,6 +162,10 @@ export class SubmissionsService {
         },
       },
     });
+
+    if (!assignmentKey) {
+      throw new BadRequestException("That assignment key is invalid or inactive");
+    }
 
     const objectKey = createObjectKey(
       `raw/${assignmentKey.assignment.id}/student_submission`,
@@ -243,10 +264,14 @@ export class SubmissionsService {
   }
 
   private async assertProfessorOwnsAssignment(assignmentId: string, professorId: string) {
-    const assignment = await this.prisma.assignment.findUniqueOrThrow({
+    const assignment = await this.prisma.assignment.findUnique({
       where: { id: assignmentId },
       select: { professorId: true },
     });
+
+    if (!assignment) {
+      throw new NotFoundException("That assignment no longer exists");
+    }
 
     if (assignment.professorId !== professorId) {
       throw new ForbiddenException("You do not have access to this assignment");

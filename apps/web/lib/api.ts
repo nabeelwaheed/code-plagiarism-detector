@@ -182,11 +182,65 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `request failed with status ${response.status}`);
+    throw new Error(await getUserFacingApiErrorMessage(response));
   }
 
   return response.json() as Promise<T>;
+}
+
+async function getUserFacingApiErrorMessage(response: Response) {
+  const fallbackMessage = getFallbackApiErrorMessage(response.status);
+
+  if (response.status >= 500) {
+    return fallbackMessage;
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    const text = (await response.text()).trim();
+    return text || fallbackMessage;
+  }
+
+  try {
+    const body = (await response.json()) as { message?: unknown };
+    const message = normalizeApiErrorMessage(body.message);
+    return message || fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+}
+
+function normalizeApiErrorMessage(message: unknown) {
+  if (typeof message === "string") {
+    return message.trim() || null;
+  }
+
+  if (Array.isArray(message)) {
+    const firstMessage = message.find((value): value is string => typeof value === "string");
+    return firstMessage?.trim() || null;
+  }
+
+  return null;
+}
+
+function getFallbackApiErrorMessage(status: number) {
+  if (status === 400) {
+    return "We couldn't complete that request. Please check your input and try again.";
+  }
+
+  if (status === 401) {
+    return "Please sign in and try again.";
+  }
+
+  if (status === 403) {
+    return "You do not have permission to do that.";
+  }
+
+  if (status === 404) {
+    return "The requested item could not be found.";
+  }
+
+  return "Something went wrong on the server. Please try again.";
 }
 
 export function login(email: string, password: string) {

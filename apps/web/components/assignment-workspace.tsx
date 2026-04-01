@@ -107,7 +107,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   }
 
   if (assignmentQuery.error || !assignmentQuery.data) {
-    return <p className="panel error-text">{assignmentQuery.error?.message ?? "Assignment not found"}</p>;
+    return <p className="panel error-text">{assignmentQuery.error?.message ?? "That assignment no longer exists."}</p>;
   }
 
   const assignment = assignmentQuery.data;

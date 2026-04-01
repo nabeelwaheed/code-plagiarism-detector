@@ -14,6 +14,7 @@ import {
   type PreparedSubmissionPersistenceInput,
   type PreparedTemplatePersistenceInput,
 } from "./persist-prepared-upload.service.js";
+import { getUserFacingUploadFailureMessage } from "./user-facing-error-messages.js";
 
 export interface UploadPreparationJob {
   assignmentId: string;
@@ -93,7 +94,7 @@ export async function processUploadPreparationJob(job: UploadPreparationJob) {
       status: "awaiting_artifacts",
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "upload preparation failed";
+    const message = getUserFacingUploadFailureMessage(error);
     await markUploadBatchFailed(job.uploadBatchId, message);
     throw error;
   }

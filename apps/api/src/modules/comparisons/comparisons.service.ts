@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
+import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -13,7 +13,7 @@ export class ComparisonsService {
   ) {}
 
   async createComparisonRun(payload: CreateComparisonRunDto, user: AuthenticatedUser) {
-    const assignment = await this.prisma.assignment.findUniqueOrThrow({
+    const assignment = await this.prisma.assignment.findUnique({
       where: { id: payload.assignmentId },
       include: {
         submissions: {
@@ -28,6 +28,10 @@ export class ComparisonsService {
         },
       },
     });
+
+    if (!assignment) {
+      throw new NotFoundException("That assignment no longer exists");
+    }
 
     if (assignment.professorId !== user.id) {
       throw new ForbiddenException("You do not have access to this assignment");

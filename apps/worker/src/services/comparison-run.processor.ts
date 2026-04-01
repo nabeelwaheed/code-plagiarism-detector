@@ -12,6 +12,7 @@ import {
   persistComparisonResults,
 } from "./persist-comparison-results.service.js";
 import { runEngine } from "./engine-runner.service.js";
+import { getUserFacingComparisonFailureMessage } from "./user-facing-error-messages.js";
 
 export interface ComparisonRunJob {
   comparisonRunId: string;
@@ -42,7 +43,7 @@ export async function processComparisonRunJob(job: ComparisonRunJob) {
     await persistComparisonResults(job.comparisonRunId, response);
     return response;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "comparison run failed";
+    const message = getUserFacingComparisonFailureMessage();
     await markComparisonRunFailed(job.comparisonRunId, message);
     throw error;
   }
