@@ -10,6 +10,7 @@ export function ProfessorDashboard() {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState<"java" | "c" | "cpp">("java");
+  const [copiedAssignmentId, setCopiedAssignmentId] = useState<string | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const logoutMutation = useLogoutMutation();
   const session = currentUserQuery.data ?? null;
@@ -40,6 +41,22 @@ export function ProfessorDashboard() {
       return;
     }
     createAssignmentMutation.mutate();
+  };
+
+  const handleCopyKey = async (assignmentId: string, key: string | null) => {
+    if (!key) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(key);
+      setCopiedAssignmentId(assignmentId);
+      window.setTimeout(() => {
+        setCopiedAssignmentId((current) => (current === assignmentId ? null : current));
+      }, 1500);
+    } catch {
+      setCopiedAssignmentId(null);
+    }
   };
 
   if (!session) {
@@ -84,7 +101,9 @@ export function ProfessorDashboard() {
         <h2>Create Assignment</h2>
         <form className="form-stack" onSubmit={handleCreateAssignment}>
           <label className="field">
-            <span>Title</span>
+            <span>
+              Assignment Title <span className="required-mark">*</span>
+            </span>
             <input
               value={title}
               onChange={(event) => setTitle(event.target.value)}
@@ -92,14 +111,20 @@ export function ProfessorDashboard() {
             />
           </label>
           <label className="field">
-            <span>Language</span>
+            <span>
+              Language <span className="required-mark">*</span>
+            </span>
             <select value={language} onChange={(event) => setLanguage(event.target.value as typeof language)}>
               <option value="java">Java</option>
               <option value="c">C</option>
               <option value="cpp">C++</option>
             </select>
           </label>
-          <button className="primary-button" disabled={createAssignmentMutation.isPending} type="submit">
+          <button
+            className="primary-button"
+            disabled={createAssignmentMutation.isPending || !title.trim()}
+            type="submit"
+          >
             {createAssignmentMutation.isPending ? "Creating..." : "Create assignment"}
           </button>
           {createAssignmentMutation.error ? (
@@ -127,7 +152,17 @@ export function ProfessorDashboard() {
                   <p className="eyebrow">{assignment.language.toUpperCase()}</p>
                   <h3>{assignment.title}</h3>
                 </div>
-                <span className="pill">{assignment.activeKey ?? "No key"}</span>
+                <div className="key-actions">
+                  <span className="pill">{assignment.activeKey ?? "No key"}</span>
+                  <button
+                    className="secondary-button key-copy-button"
+                    disabled={!assignment.activeKey}
+                    onClick={() => void handleCopyKey(assignment.id, assignment.activeKey)}
+                    type="button"
+                  >
+                    {copiedAssignmentId === assignment.id ? "Copied" : "Copy"}
+                  </button>
+                </div>
               </div>
               <p>
                 Current submissions: {assignment.submissionCounts.current} | Historical:{" "}

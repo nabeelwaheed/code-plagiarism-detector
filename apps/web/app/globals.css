@@ -112,6 +112,10 @@ body {
   color: var(--muted);
 }
 
+.required-mark {
+  color: #b42318;
+}
+
 .field input,
 .field select,
 input[type="file"] {
@@ -176,6 +180,19 @@ input[type="file"] {
 .assignment-card-top {
   grid-template-columns: 1fr auto;
   align-items: start;
+}
+
+.key-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-self: end;
+}
+
+.key-copy-button {
+  padding: 6px 10px;
+  font-size: 0.9rem;
 }
 
 .pill {

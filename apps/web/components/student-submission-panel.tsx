@@ -84,7 +84,9 @@ export function StudentSubmissionPanel() {
       <section className="panel">
         <form className="form-stack" onSubmit={handleSubmit}>
           <label className="field">
-            <span>Assignment keyID</span>
+            <span>
+              Assignment keyID <span className="required-mark">*</span>
+            </span>
             <input
               value={assignmentKey}
               onChange={(event) => setAssignmentKey(event.target.value)}
@@ -92,7 +94,9 @@ export function StudentSubmissionPanel() {
             />
           </label>
           <label className="field">
-            <span>Zip archive</span>
+            <span>
+              Zip archive <span className="required-mark">*</span>
+            </span>
             <input
               type="file"
               accept=".zip"
@@ -101,7 +105,7 @@ export function StudentSubmissionPanel() {
           </label>
           <button
             className="primary-button"
-            disabled={uploadMutation.isPending || !selectedFile}
+            disabled={uploadMutation.isPending || !selectedFile || !assignmentKey.trim()}
             type="submit"
           >
             {uploadMutation.isPending ? "Uploading..." : "Submit zip"}
