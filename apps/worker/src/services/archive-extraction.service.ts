@@ -189,6 +189,7 @@ function normalizeSourceText(sourceBuffer: Buffer) {
   return sourceBuffer
     .toString("utf8")
     .replace(/^\uFEFF/, "")
+    .replace(/\u0000/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n");
 }
