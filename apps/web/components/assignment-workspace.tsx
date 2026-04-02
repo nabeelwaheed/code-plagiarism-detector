@@ -5,11 +5,21 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import {
   createComparisonRun,
+  downloadAllAssignmentSubmissions,
+  downloadAssignmentSubmission,
+  downloadAssignmentTemplate,
   getAssignment,
+  getAssignmentSubmissionDetail,
+  getAssignmentTemplateDetail,
   getUploadBatch,
   uploadProfessorArchive,
 } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
+
+type SelectedArtifact =
+  | { type: "submission"; id: string }
+  | { type: "template"; id: string }
+  | null;
 
 export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) {
   const queryClient = useQueryClient();
@@ -19,6 +29,10 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const [activeWorkspaceView, setActiveWorkspaceView] = useState<"submissions" | "pairs">(
     "submissions",
   );
+  const [activePairCategory, setActivePairCategory] = useState<
+    "current-current" | "current-historical"
+  >("current-current");
+  const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -36,6 +50,20 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       const status = query.state.data?.status;
       return status === "ready" || status === "failed" ? false : 3000;
     },
+  });
+
+  const artifactDetailQuery = useQuery({
+    queryKey: ["assignment-artifact", assignmentId, selectedArtifact?.type, selectedArtifact?.id],
+    queryFn: () => {
+      if (!selectedArtifact) {
+        throw new Error("No artifact selected");
+      }
+
+      return selectedArtifact.type === "template"
+        ? getAssignmentTemplateDetail(assignmentId, selectedArtifact.id)
+        : getAssignmentSubmissionDetail(assignmentId, selectedArtifact.id);
+    },
+    enabled: activeWorkspaceView === "submissions" && Boolean(selectedArtifact),
   });
 
   const historicalUploadMutation = useMutation({
@@ -70,6 +98,27 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     mutationFn: () => createComparisonRun(assignmentId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] });
+    },
+  });
+
+  const downloadMutation = useMutation({
+    mutationFn: async (
+      input:
+        | { type: "all" }
+        | { type: "submission"; id: string }
+        | { type: "template"; id: string },
+    ) => {
+      if (input.type === "all") {
+        await downloadAllAssignmentSubmissions(assignmentId);
+        return;
+      }
+
+      if (input.type === "template") {
+        await downloadAssignmentTemplate(assignmentId, input.id);
+        return;
+      }
+
+      await downloadAssignmentSubmission(assignmentId, input.id);
     },
   });
 
@@ -124,6 +173,8 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       (pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "historical")
       || (pair.leftSubmission.kind === "historical" && pair.rightSubmission.kind === "current"),
   ) ?? [];
+  const visiblePairs =
+    activePairCategory === "current-current" ? currentVsCurrentPairs : currentVsHistoricalPairs;
 
   return (
     <div className="page-stack">
@@ -226,7 +277,26 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       {activeWorkspaceView === "submissions" ? (
         <>
           <section className="panel">
-            <h2>Prepared artifacts</h2>
+            <div className="section-heading">
+              <div>
+                <h2>Prepared artifacts</h2>
+                <p>
+                  Browse current submissions, historical submissions, and the active template for
+                  this assignment.
+                </p>
+              </div>
+              <button
+                className="secondary-button"
+                disabled={downloadMutation.isPending || assignment.submissions.length === 0}
+                onClick={() => downloadMutation.mutate({ type: "all" })}
+                type="button"
+              >
+                {downloadMutation.isPending ? "Preparing..." : "Download all submissions"}
+              </button>
+            </div>
+            {downloadMutation.error ? (
+              <p className="error-text">{downloadMutation.error.message}</p>
+            ) : null}
             <div className="stats-row">
               <div className="stat-card">
                 <span>Current submissions</span>
@@ -243,6 +313,127 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
             </div>
           </section>
 
+          <div className="split-grid">
+            <section className="panel">
+              <h2>Current</h2>
+              {currentSubmissions.length > 0 ? (
+                <div className="card-grid">
+                  {currentSubmissions.map((submission) => (
+                    <article className="assignment-card" key={submission.id}>
+                      <div>
+                        <p className="eyebrow">{submission.fileCount} files</p>
+                        <h3>{submission.displayName}</h3>
+                        <p>Created {new Date(submission.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div className="hero-meta">
+                        <button
+                          className="secondary-button"
+                          onClick={() => setSelectedArtifact({ type: "submission", id: submission.id })}
+                          type="button"
+                        >
+                          View
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={downloadMutation.isPending}
+                          onClick={() => downloadMutation.mutate({ type: "submission", id: submission.id })}
+                          type="button"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p>No current submissions yet.</p>
+              )}
+            </section>
+
+            <section className="panel">
+              <h2>Historical</h2>
+              {historicalSubmissions.length > 0 ? (
+                <div className="card-grid">
+                  {historicalSubmissions.map((submission) => (
+                    <article className="assignment-card" key={submission.id}>
+                      <div>
+                        <p className="eyebrow">{submission.fileCount} files</p>
+                        <h3>{submission.displayName}</h3>
+                        <p>Created {new Date(submission.createdAt).toLocaleString()}</p>
+                      </div>
+                      <div className="hero-meta">
+                        <button
+                          className="secondary-button"
+                          onClick={() => setSelectedArtifact({ type: "submission", id: submission.id })}
+                          type="button"
+                        >
+                          View
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={downloadMutation.isPending}
+                          onClick={() => downloadMutation.mutate({ type: "submission", id: submission.id })}
+                          type="button"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p>No historical submissions yet.</p>
+              )}
+            </section>
+
+            <section className="panel">
+              <h2>Template</h2>
+              {assignment.activeTemplate ? (
+                <div className="card-grid">
+                  <article className="assignment-card">
+                    <div>
+                      <p className="eyebrow">Version {assignment.activeTemplate.versionNumber}</p>
+                      <h3>Active template</h3>
+                      <p>
+                        {assignment.activeTemplate.fileCount} files · created{" "}
+                        {new Date(assignment.activeTemplate.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="hero-meta">
+                      <button
+                        className="secondary-button"
+                        onClick={() =>
+                          setSelectedArtifact({
+                            type: "template",
+                            id: assignment.activeTemplate!.id,
+                          })
+                        }
+                        type="button"
+                      >
+                        View
+                      </button>
+                      <button
+                        className="secondary-button"
+                        disabled={downloadMutation.isPending}
+                        onClick={() =>
+                          downloadMutation.mutate({
+                            type: "template",
+                            id: assignment.activeTemplate!.id,
+                          })
+                        }
+                        type="button"
+                      >
+                        Download
+                      </button>
+                    </div>
+                  </article>
+                </div>
+              ) : (
+                <p>No active template uploaded yet.</p>
+              )}
+            </section>
+          </div>
+
           <section className="panel">
             <h2>Upload history</h2>
             <ul className="compact-list">
@@ -253,6 +444,76 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="panel">
+            <h2>Selected artifact</h2>
+            {!selectedArtifact ? (
+              <p>Select a submission or template to view its contents.</p>
+            ) : artifactDetailQuery.isLoading ? (
+              <p>Loading artifact...</p>
+            ) : artifactDetailQuery.error ? (
+              <p className="error-text">{artifactDetailQuery.error.message}</p>
+            ) : artifactDetailQuery.data ? (
+              <div className="page-stack">
+                <div className="section-heading">
+                  <div>
+                    <p className="eyebrow">
+                      {artifactDetailQuery.data.kind === "template"
+                        ? `Template v${artifactDetailQuery.data.versionNumber ?? 1}`
+                        : `${artifactDetailQuery.data.kind} submission`}
+                    </p>
+                    <h3>{artifactDetailQuery.data.displayName}</h3>
+                    <p>
+                      {artifactDetailQuery.data.fileCount} files · created{" "}
+                      {new Date(artifactDetailQuery.data.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    disabled={downloadMutation.isPending}
+                    onClick={() =>
+                      artifactDetailQuery.data.kind === "template"
+                        ? downloadMutation.mutate({
+                            type: "template",
+                            id: artifactDetailQuery.data.id,
+                          })
+                        : downloadMutation.mutate({
+                            type: "submission",
+                            id: artifactDetailQuery.data.id,
+                          })
+                    }
+                    type="button"
+                  >
+                    Download
+                  </button>
+                </div>
+
+                {artifactDetailQuery.data.files.map((file) => (
+                  <article className="assignment-card" key={file.id}>
+                    <div>
+                      <p className="eyebrow">{file.archivePath ?? "prepared source file"}</p>
+                      <h3>{file.relativePath}</h3>
+                    </div>
+                    <pre
+                      style={{
+                        margin: 0,
+                        overflowX: "auto",
+                        whiteSpace: "pre-wrap",
+                        background: "#fffdf7",
+                        border: "1px solid rgba(217, 210, 192, 0.6)",
+                        borderRadius: "12px",
+                        padding: "12px 14px",
+                      }}
+                    >
+                      {file.contents}
+                    </pre>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p>Select a submission or template to view its contents.</p>
+            )}
           </section>
         </>
       ) : (
@@ -265,34 +526,29 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 <strong>{latestCompletedRun.status}</strong>.
               </p>
 
-              <h3>Current vs current</h3>
-              {currentVsCurrentPairs.length > 0 ? (
-                <div className="pair-table">
-                  <div className="pair-table-head">
-                    <span>Left</span>
-                    <span>Right</span>
-                    <span>Similarity</span>
-                    <span>Matches</span>
-                    <span>Viewer</span>
-                  </div>
-                  {currentVsCurrentPairs.map((pair) => (
-                    <div className="pair-table-row" key={pair.id}>
-                      <span>{pair.leftSubmission.displayName}</span>
-                      <span>{pair.rightSubmission.displayName}</span>
-                      <span>{pair.similarityScore.toFixed(3)}</span>
-                      <span>{pair.matchCount}</span>
-                      <Link className="text-link" href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}>
-                        Open
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p>No current vs current pairs in this run.</p>
-              )}
+              <div className="hero-meta">
+                <button
+                  className={activePairCategory === "current-current" ? "primary-button" : "secondary-button"}
+                  onClick={() => setActivePairCategory("current-current")}
+                  type="button"
+                >
+                  Current vs current
+                </button>
+                <button
+                  className={activePairCategory === "current-historical" ? "primary-button" : "secondary-button"}
+                  onClick={() => setActivePairCategory("current-historical")}
+                  type="button"
+                >
+                  Current vs historical
+                </button>
+              </div>
 
-              <h3>Current vs historical</h3>
-              {currentVsHistoricalPairs.length > 0 ? (
+              <h3>
+                {activePairCategory === "current-current"
+                  ? "Current vs current"
+                  : "Current vs historical"}
+              </h3>
+              {visiblePairs.length > 0 ? (
                 <div className="pair-table">
                   <div className="pair-table-head">
                     <span>Left</span>
@@ -301,7 +557,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                     <span>Matches</span>
                     <span>Viewer</span>
                   </div>
-                  {currentVsHistoricalPairs.map((pair) => (
+                  {visiblePairs.map((pair) => (
                     <div className="pair-table-row" key={pair.id}>
                       <span>{pair.leftSubmission.displayName}</span>
                       <span>{pair.rightSubmission.displayName}</span>
@@ -314,7 +570,11 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   ))}
                 </div>
               ) : (
-                <p>No current vs historical pairs in this run.</p>
+                <p>
+                  {activePairCategory === "current-current"
+                    ? "No current vs current pairs in this run."
+                    : "No current vs historical pairs in this run."}
+                </p>
               )}
             </>
           ) : (

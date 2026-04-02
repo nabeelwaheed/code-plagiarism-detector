@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { UploadPurpose } from "@prisma/client";
-import { createObjectKey, writeObjectBuffer } from "@similarity/shared";
+import { zipSync } from "fflate";
+import {
+  createObjectKey,
+  readObjectBuffer,
+  writeObjectBuffer,
+} from "@similarity/shared";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
@@ -263,6 +268,201 @@ export class SubmissionsService {
     };
   }
 
+  async getSubmissionDetail(
+    assignmentId: string,
+    submissionId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+
+    const submission = await this.prisma.submission.findFirst({
+      where: {
+        id: submissionId,
+        assignmentId,
+      },
+      include: {
+        files: {
+          orderBy: { canonicalOrder: "asc" },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException("That submission no longer exists");
+    }
+
+    return {
+      id: submission.id,
+      displayName: submission.displayName,
+      kind: submission.kind.toLowerCase(),
+      createdAt: submission.createdAt,
+      fileCount: submission.files.length,
+      concatenatedSource: submission.concatenatedSource,
+      sourceMap: submission.sourceMapJson,
+      files: await Promise.all(
+        submission.files.map(async (file) => ({
+          id: file.id,
+          relativePath: file.relativePath,
+          archivePath: file.archivePath,
+          contents: (await readObjectBuffer(file.storageObjectKey)).toString("utf8"),
+        })),
+      ),
+    };
+  }
+
+  async getTemplateDetail(
+    assignmentId: string,
+    templateId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+
+    const template = await this.prisma.assignmentTemplate.findFirst({
+      where: {
+        id: templateId,
+        assignmentId,
+      },
+      include: {
+        files: {
+          orderBy: { canonicalOrder: "asc" },
+        },
+      },
+    });
+
+    if (!template) {
+      throw new NotFoundException("That template no longer exists");
+    }
+
+    return {
+      id: template.id,
+      displayName: `Template v${template.versionNumber}`,
+      kind: "template",
+      versionNumber: template.versionNumber,
+      createdAt: template.createdAt,
+      fileCount: template.files.length,
+      concatenatedSource: template.concatenatedSource,
+      sourceMap: template.sourceMapJson,
+      files: await Promise.all(
+        template.files.map(async (file) => ({
+          id: file.id,
+          relativePath: file.relativePath,
+          archivePath: file.archivePath,
+          contents: (await readObjectBuffer(file.storageObjectKey)).toString("utf8"),
+        })),
+      ),
+    };
+  }
+
+  async downloadSubmissionArchive(
+    assignmentId: string,
+    submissionId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+
+    const submission = await this.prisma.submission.findFirst({
+      where: {
+        id: submissionId,
+        assignmentId,
+      },
+      include: {
+        files: {
+          orderBy: { canonicalOrder: "asc" },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException("That submission no longer exists");
+    }
+
+    return {
+      fileName: `${sanitizeDownloadName(submission.displayName)}.zip`,
+      buffer: Buffer.from(
+        zipSync(await createZipEntries(`${sanitizeArchiveSegment(submission.displayName)}`, submission.files)),
+      ),
+    };
+  }
+
+  async downloadTemplateArchive(
+    assignmentId: string,
+    templateId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+
+    const template = await this.prisma.assignmentTemplate.findFirst({
+      where: {
+        id: templateId,
+        assignmentId,
+      },
+      include: {
+        files: {
+          orderBy: { canonicalOrder: "asc" },
+        },
+      },
+    });
+
+    if (!template) {
+      throw new NotFoundException("That template no longer exists");
+    }
+
+    const folderName = `template-v${template.versionNumber}`;
+
+    return {
+      fileName: `${sanitizeDownloadName(folderName)}.zip`,
+      buffer: Buffer.from(
+        zipSync(await createZipEntries(sanitizeArchiveSegment(folderName), template.files)),
+      ),
+    };
+  }
+
+  async downloadAllAssignmentSubmissionsArchive(
+    assignmentId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        submissions: {
+          include: {
+            files: {
+              orderBy: { canonicalOrder: "asc" },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException("That assignment no longer exists");
+    }
+
+    if (assignment.submissions.length === 0) {
+      throw new BadRequestException("There are no submissions available to download.");
+    }
+
+    const entries: Record<string, Uint8Array> = {};
+    const folderCounts = new Map<string, number>();
+
+    for (const submission of assignment.submissions) {
+      const baseFolder = `${submission.kind.toLowerCase()}/${sanitizeArchiveSegment(submission.displayName)}`;
+      const usageCount = (folderCounts.get(baseFolder) ?? 0) + 1;
+      folderCounts.set(baseFolder, usageCount);
+      const uniqueFolder = usageCount > 1 ? `${baseFolder}-${usageCount}` : baseFolder;
+
+      Object.assign(entries, await createZipEntries(uniqueFolder, submission.files));
+    }
+
+    return {
+      fileName: `${sanitizeDownloadName(assignment.title)}-submissions.zip`,
+      buffer: Buffer.from(zipSync(entries)),
+    };
+  }
+
   private async assertProfessorOwnsAssignment(assignmentId: string, professorId: string) {
     const assignment = await this.prisma.assignment.findUnique({
       where: { id: assignmentId },
@@ -312,4 +512,35 @@ function ensureProfessorUploadPurpose(
   if (purpose === "student_submission") {
     throw new BadRequestException("professor archive uploads must be historical or template");
   }
+}
+
+async function createZipEntries(
+  rootFolder: string,
+  files: Array<{
+    relativePath: string;
+    storageObjectKey: string;
+  }>,
+) {
+  const entries: Record<string, Uint8Array> = {};
+
+  for (const file of files) {
+    entries[`${rootFolder}/${normalizeArchiveRelativePath(file.relativePath)}`] =
+      await readObjectBuffer(file.storageObjectKey);
+  }
+
+  return entries;
+}
+
+function normalizeArchiveRelativePath(relativePath: string) {
+  return relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
+function sanitizeArchiveSegment(value: string) {
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return sanitized || "artifact";
+}
+
+function sanitizeDownloadName(value: string) {
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return sanitized || "download";
 }

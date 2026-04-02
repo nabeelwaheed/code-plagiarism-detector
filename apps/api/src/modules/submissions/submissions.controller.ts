@@ -1,5 +1,14 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Req } from "@nestjs/common";
-import type { FastifyRequest } from "fastify";
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  Res,
+} from "@nestjs/common";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { CurrentUser, Roles } from "../auth/auth.decorators.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { SubmissionsService } from "./submissions.service.js";
@@ -64,6 +73,81 @@ export class SubmissionsController {
       archiveBuffer,
       user,
     });
+  }
+
+  @Roles("professor")
+  @Get("assignment/:assignmentId/submissions/:submissionId/download")
+  async downloadSubmissionArchive(
+    @Param("assignmentId") assignmentId: string,
+    @Param("submissionId") submissionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() reply: FastifyReply,
+  ) {
+    const result = await this.submissionsService.downloadSubmissionArchive(
+      assignmentId,
+      submissionId,
+      user,
+    );
+
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    return reply.send(result.buffer);
+  }
+
+  @Roles("professor")
+  @Get("assignment/:assignmentId/templates/:templateId/download")
+  async downloadTemplateArchive(
+    @Param("assignmentId") assignmentId: string,
+    @Param("templateId") templateId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() reply: FastifyReply,
+  ) {
+    const result = await this.submissionsService.downloadTemplateArchive(
+      assignmentId,
+      templateId,
+      user,
+    );
+
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    return reply.send(result.buffer);
+  }
+
+  @Roles("professor")
+  @Get("assignment/:assignmentId/download")
+  async downloadAllAssignmentSubmissionsArchive(
+    @Param("assignmentId") assignmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() reply: FastifyReply,
+  ) {
+    const result = await this.submissionsService.downloadAllAssignmentSubmissionsArchive(
+      assignmentId,
+      user,
+    );
+
+    reply.header("Content-Type", "application/zip");
+    reply.header("Content-Disposition", `attachment; filename="${result.fileName}"`);
+    return reply.send(result.buffer);
+  }
+
+  @Roles("professor")
+  @Get("assignment/:assignmentId/submissions/:submissionId")
+  getSubmissionDetail(
+    @Param("assignmentId") assignmentId: string,
+    @Param("submissionId") submissionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.submissionsService.getSubmissionDetail(assignmentId, submissionId, user);
+  }
+
+  @Roles("professor")
+  @Get("assignment/:assignmentId/templates/:templateId")
+  getTemplateDetail(
+    @Param("assignmentId") assignmentId: string,
+    @Param("templateId") templateId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.submissionsService.getTemplateDetail(assignmentId, templateId, user);
   }
 
   @Get(":uploadBatchId")

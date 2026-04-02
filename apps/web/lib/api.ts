@@ -171,6 +171,27 @@ export interface PairDetailResponse {
   }>;
 }
 
+export interface AssignmentArtifactDetail {
+  id: string;
+  displayName: string;
+  kind: "current" | "historical" | "template";
+  versionNumber?: number;
+  createdAt: string;
+  fileCount: number;
+  concatenatedSource: string;
+  sourceMap: Array<{
+    filePath: string;
+    byteStart: number;
+    byteEnd: number;
+  }>;
+  files: Array<{
+    id: string;
+    relativePath: string;
+    archivePath?: string;
+    contents: string;
+  }>;
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
@@ -336,4 +357,67 @@ export function logout() {
     method: "POST",
     body: JSON.stringify({}),
   });
+}
+
+export function getAssignmentSubmissionDetail(assignmentId: string, submissionId: string) {
+  return apiFetch<AssignmentArtifactDetail>(
+    `/uploads/assignment/${assignmentId}/submissions/${submissionId}`,
+  );
+}
+
+export function getAssignmentTemplateDetail(assignmentId: string, templateId: string) {
+  return apiFetch<AssignmentArtifactDetail>(
+    `/uploads/assignment/${assignmentId}/templates/${templateId}`,
+  );
+}
+
+export function downloadAssignmentSubmission(assignmentId: string, submissionId: string) {
+  return downloadApiFile(
+    `/uploads/assignment/${assignmentId}/submissions/${submissionId}/download`,
+    `${submissionId}.zip`,
+  );
+}
+
+export function downloadAssignmentTemplate(assignmentId: string, templateId: string) {
+  return downloadApiFile(
+    `/uploads/assignment/${assignmentId}/templates/${templateId}/download`,
+    `${templateId}.zip`,
+  );
+}
+
+export function downloadAllAssignmentSubmissions(assignmentId: string) {
+  return downloadApiFile(`/uploads/assignment/${assignmentId}/download`, `${assignmentId}-submissions.zip`);
+}
+
+async function downloadApiFile(path: string, fallbackFileName: string) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(await getUserFacingApiErrorMessage(response));
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = getDownloadFileName(response.headers.get("content-disposition"), fallbackFileName);
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(objectUrl);
+}
+
+function getDownloadFileName(contentDisposition: string | null, fallbackFileName: string) {
+  if (!contentDisposition) {
+    return fallbackFileName;
+  }
+
+  const match = /filename="([^"]+)"/i.exec(contentDisposition);
+  if (!match?.[1]) {
+    return fallbackFileName;
+  }
+
+  return match[1];
 }
