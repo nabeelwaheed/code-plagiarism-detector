@@ -1,48 +1,60 @@
-# TestSet16 - COSC 4P02 Group 16 Stage 3 C Test Repository
+# TestSet16 - COSC 4P02 Stage 3 Mixed-Language Submission Set
 
-This repository is a Stage 3 submission test set in designated language **C**.
-It is structured so each student submission can be zipped independently, and then
-packaged into a top-level `TestSet16.zip` as a zip-of-zips.
+This repository is a Stage 3 test repository with a zip-of-zips submission format.
+It contains 20 student-style submissions:
 
-## Layout
+- 10 C submissions (`c_submission_01` to `c_submission_10`)
+- 10 C++ submissions (`cpp_submission_01` to `cpp_submission_10`)
 
-- `submissions/` - 12 student-style submission folders (`submission_01` to `submission_12`)
-- `boilerplate/` - reusable instructor starter packages for template subtraction tests
-- `MANIFEST.md` - relationship mapping, compile commands, and rough LOC table
-- `build_check.sh` - build and LOC sanity script for all submissions
-- `package_testset.sh` - creates per-submission zips and top-level deliverable zips
-- `dist/` - generated packaging artifacts
+## Student Submission Format Rules (Applied)
 
-## Build Verification
+Each submission folder is flattened and contains only:
 
-From `TestSet16/`:
+- source files (`.c/.h` for C, `.cpp/.hpp/.h` for C++)
+- `METADATA.txt`
+
+Student folders do not contain `src/`, `include/`, `build/`, Makefiles, binaries, object files, logs, or extra docs.
+
+## Repository Layout
+
+- `submissions/` - 20 flattened student submission folders
+- `boilerplate/` - separate boilerplate packages for template subtraction testing
+- `MANIFEST.md` - relationship mapping, language split, LOC, and compile commands
+- `build_check.sh` - compiles all submissions and enforces structure/extension/LOC checks
+- `package_testset.sh` - creates per-submission zips and top-level `dist/TestSet16.zip`
+- `dist/` - packaging outputs
+
+## Validate Build and Structure
+
+Run from `TestSet16/`:
 
 ```bash
 bash build_check.sh
 ```
 
-The script will:
-- compile each submission with its own `Makefile`
-- print pass/fail per submission
-- report rough code-only LOC per submission (from `.c` files)
-- return non-zero if any build fails
+`build_check.sh` checks:
+- folder flattening (no nested directories in submissions)
+- allowed file extensions by language
+- per-submission LOC floor (`>= 100` code lines in `.c` or `.cpp`)
+- compilation with:
+  - C: `gcc -std=c11 -Wall -Wextra`
+  - C++: `g++ -std=c++17 -Wall -Wextra`
 
-## Packaging
+## Package for Submission
 
-From `TestSet16/`:
+Run from `TestSet16/`:
 
 ```bash
 bash package_testset.sh
 ```
 
-Generated artifacts:
-- `dist/TestSet16.zip` - zip containing per-submission zip files
-- `dist/BoilerplateSet16.zip` - zip containing boilerplate package zip files
-- `dist/submission_zips/*.zip` - individual submission archives
-- `dist/boilerplate_zips/*.zip` - individual boilerplate archives
+Outputs:
+- `dist/submission_zips/*.zip` (20 submission zip files)
+- `dist/TestSet16.zip` (zip containing only submission zip files)
+- `dist/BoilerplateSet16.zip` (separate boilerplate artifact)
 
 ## Notes
 
-- All projects are intended to compile with standard GCC on Linux using C11.
-- No external libraries beyond the standard C library are required.
-- Metadata uses placeholders only; no personal information or encryption logic is included.
+- Metadata uses placeholder assignment key and labels only.
+- No malicious payloads or crash-oriented test content are included.
+- Programs are student-style and compile with standard Linux toolchains.

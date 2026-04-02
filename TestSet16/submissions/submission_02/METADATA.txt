@@ -1,5 +1,0 @@
-submission_label: student_beta_submission
-assignment_key: assignment_key_placeholder_cosc4p02_stage3
-intended_relationship: SIMILAR_PAIR_B
-uses_boilerplate: yes
-boilerplate_source: boilerplate_02

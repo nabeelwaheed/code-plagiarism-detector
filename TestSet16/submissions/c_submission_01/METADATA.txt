@@ -1,0 +1,6 @@
+submission_label: student_c_alpha_submission
+assignment_key: assignment_key_placeholder_cosc4p02_stage3
+language: C
+intended_relationship: C_PAIR_A
+uses_boilerplate: yes
+boilerplate_source: boilerplate_c_02

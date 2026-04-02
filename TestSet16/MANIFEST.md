@@ -1,45 +1,59 @@
-# MANIFEST - TestSet16
+# MANIFEST - TestSet16 Mixed-Language Submission Set
 
-This manifest documents intended similarity relationships and validation details for all 12 submissions.
+This manifest documents all 20 student submissions, intended relationships, boilerplate usage, and compile commands.
 
-## Intentional Relationship Mapping
+## Relationship Mapping
 
-- Similar pair:
-  - `submission_01` (`SIMILAR_PAIR_A`)
-  - `submission_02` (`SIMILAR_PAIR_B`)
-- Similar triple:
-  - `submission_03` (`TRIPLE_A`)
-  - `submission_04` (`TRIPLE_B`)
-  - `submission_05` (`TRIPLE_C`)
-- Obfuscated pair:
-  - `submission_06` (`OBFUSCATED_PAIR_A`)
-  - `submission_07` (`OBFUSCATED_PAIR_B`)
-- Unique programs:
-  - `submission_08`, `submission_09`, `submission_10`, `submission_11`, `submission_12`
+### C Similarity Structure
+- Pair:
+  - `c_submission_01` -> `C_PAIR_A`
+  - `c_submission_02` -> `C_PAIR_B`
+- Triple:
+  - `c_submission_03` -> `C_TRIPLE_A`
+  - `c_submission_04` -> `C_TRIPLE_B`
+  - `c_submission_05` -> `C_TRIPLE_C`
+
+### C++ Similarity Structure
+- Pair:
+  - `cpp_submission_01` -> `CPP_PAIR_A`
+  - `cpp_submission_02` -> `CPP_PAIR_B`
+- Triple:
+  - `cpp_submission_03` -> `CPP_TRIPLE_A`
+  - `cpp_submission_04` -> `CPP_TRIPLE_B`
+  - `cpp_submission_05` -> `CPP_TRIPLE_C`
+
+### Optional Harder Pair
+- `cpp_submission_08` -> `OPTIONAL_OBFUSCATED_A`
+- `cpp_submission_09` -> `OPTIONAL_OBFUSCATED_B`
 
 ## Submission Table
 
-| Folder | submission_label | Theme | intended_relationship | uses_boilerplate | boilerplate_source | multi-file | rough code LOC (`.c`) | compile command |
-|---|---|---|---|---|---|---|---:|---|
-| `submission_01` | `student_alpha_submission` | linked-list inventory manager | `SIMILAR_PAIR_A` | yes | `boilerplate_02` | yes | 293 | `make -C submissions/submission_01` |
-| `submission_02` | `student_beta_submission` | inventory manager variant | `SIMILAR_PAIR_B` | yes | `boilerplate_02` | yes | 258 | `make -C submissions/submission_02` |
-| `submission_03` | `student_gamma_submission` | gradebook CSV processor | `TRIPLE_A` | yes | `boilerplate_01` | yes | 172 | `make -C submissions/submission_03` |
-| `submission_04` | `student_delta_submission` | gradebook variant | `TRIPLE_B` | yes | `boilerplate_01` | yes | 177 | `make -C submissions/submission_04` |
-| `submission_05` | `student_epsilon_submission` | gradebook variant (reordered helpers) | `TRIPLE_C` | yes | `boilerplate_01` | yes | 192 | `make -C submissions/submission_05` |
-| `submission_06` | `student_zeta_submission` | graph traversal + components | `OBFUSCATED_PAIR_A` | no | `none` | yes | 228 | `make -C submissions/submission_06` |
-| `submission_07` | `student_eta_submission` | graph reachability variant | `OBFUSCATED_PAIR_B` | no | `none` | yes | 228 | `make -C submissions/submission_07` |
-| `submission_08` | `student_theta_submission` | text stats / word frequency | `UNIQUE` | yes | `boilerplate_01` | no | 121 | `make -C submissions/submission_08` |
-| `submission_09` | `student_iota_submission` | file merge / diff-lite | `UNIQUE` | no | `none` | no | 133 | `make -C submissions/submission_09` |
-| `submission_10` | `student_kappa_submission` | expression evaluator | `UNIQUE` | no | `none` | yes | 175 | `make -C submissions/submission_10` |
-| `submission_11` | `student_lambda_submission` | maze/pathfinding solver | `UNIQUE` | no | `none` | yes | 242 | `make -C submissions/submission_11` |
-| `submission_12` | `student_mu_submission` | spell-check dictionary lookup | `UNIQUE` | yes | `boilerplate_01` | yes | 262 | `make -C submissions/submission_12` |
+| Folder | language | Program theme | intended_relationship | uses_boilerplate | boilerplate_source | approx LOC (`.c/.cpp`) | compile command |
+|---|---|---|---|---|---|---:|---|
+| `c_submission_01` | C | inventory manager | `C_PAIR_A` | yes | `boilerplate_c_02` | 293 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_01.bin` |
+| `c_submission_02` | C | inventory manager variant | `C_PAIR_B` | yes | `boilerplate_c_02` | 258 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_02.bin` |
+| `c_submission_03` | C | gradebook processor | `C_TRIPLE_A` | yes | `boilerplate_c_01` | 172 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_03.bin` |
+| `c_submission_04` | C | gradebook variant | `C_TRIPLE_B` | yes | `boilerplate_c_01` | 177 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_04.bin` |
+| `c_submission_05` | C | gradebook variant (helper reshaping) | `C_TRIPLE_C` | yes | `boilerplate_c_01` | 192 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_05.bin` |
+| `c_submission_06` | C | graph traversal | `UNIQUE` | no | `none` | 228 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_06.bin` |
+| `c_submission_07` | C | maze/pathfinding | `UNIQUE` | no | `none` | 242 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_07.bin` |
+| `c_submission_08` | C | text statistics | `UNIQUE` | yes | `boilerplate_c_01` | 121 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_08.bin` |
+| `c_submission_09` | C | expression evaluator | `UNIQUE` | no | `none` | 175 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_09.bin` |
+| `c_submission_10` | C | spell checker | `UNIQUE` | yes | `boilerplate_c_01` | 262 | `gcc -std=c11 -Wall -Wextra *.c -o /tmp/c_submission_10.bin` |
+| `cpp_submission_01` | C++ | record management tool | `CPP_PAIR_A` | yes | `boilerplate_cpp_02` | 163 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_01.bin` |
+| `cpp_submission_02` | C++ | record management variant | `CPP_PAIR_B` | yes | `boilerplate_cpp_02` | 168 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_02.bin` |
+| `cpp_submission_03` | C++ | CSV analyzer | `CPP_TRIPLE_A` | yes | `boilerplate_cpp_01` | 107 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_03.bin` |
+| `cpp_submission_04` | C++ | CSV analyzer variant | `CPP_TRIPLE_B` | yes | `boilerplate_cpp_01` | 105 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_04.bin` |
+| `cpp_submission_05` | C++ | CSV analyzer variant (helper reshaping) | `CPP_TRIPLE_C` | yes | `boilerplate_cpp_01` | 111 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_05.bin` |
+| `cpp_submission_06` | C++ | command parser | `UNIQUE` | yes | `boilerplate_cpp_02` | 109 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_06.bin` |
+| `cpp_submission_07` | C++ | matrix toolkit | `UNIQUE` | no | `none` | 106 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_07.bin` |
+| `cpp_submission_08` | C++ | graph traversal analyzer | `OPTIONAL_OBFUSCATED_A` | no | `none` | 123 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_08.bin` |
+| `cpp_submission_09` | C++ | graph traversal variant (obfuscated) | `OPTIONAL_OBFUSCATED_B` | no | `none` | 121 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_09.bin` |
+| `cpp_submission_10` | C++ | file merge / diff-lite | `UNIQUE` | no | `none` | 104 | `g++ -std=c++17 -Wall -Wextra *.cpp -o /tmp/cpp_submission_10.bin` |
 
 ## Boilerplate Packages
 
-- `boilerplate/boilerplate_01`: argument parsing and file-loading starter helpers.
-- `boilerplate/boilerplate_02`: menu framework and common record utilities.
-
-## Packaging Targets
-
-- `dist/TestSet16.zip`: zip-of-zipped student submissions.
-- `dist/BoilerplateSet16.zip`: zipped boilerplate set artifact.
+- `boilerplate/boilerplate_c_01`
+- `boilerplate/boilerplate_c_02`
+- `boilerplate/boilerplate_cpp_01`
+- `boilerplate/boilerplate_cpp_02`

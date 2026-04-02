@@ -1,5 +1,0 @@
-submission_label: student_mu_submission
-assignment_key: assignment_key_placeholder_cosc4p02_stage3
-intended_relationship: UNIQUE
-uses_boilerplate: yes
-boilerplate_source: boilerplate_01

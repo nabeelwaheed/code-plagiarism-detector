@@ -1,5 +1,0 @@
-submission_label: student_zeta_submission
-assignment_key: assignment_key_placeholder_cosc4p02_stage3
-intended_relationship: OBFUSCATED_PAIR_A
-uses_boilerplate: no
-boilerplate_source: none

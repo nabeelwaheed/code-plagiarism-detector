@@ -1,0 +1,6 @@
+submission_label: student_cpp_theta_submission
+assignment_key: assignment_key_placeholder_cosc4p02_stage3
+language: C++
+intended_relationship: OPTIONAL_OBFUSCATED_A
+uses_boilerplate: no
+boilerplate_source: none
