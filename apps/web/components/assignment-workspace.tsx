@@ -16,6 +16,9 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [trackedUploadBatchId, setTrackedUploadBatchId] = useState<string | null>(null);
+  const [activeWorkspaceView, setActiveWorkspaceView] = useState<"submissions" | "pairs">(
+    "submissions",
+  );
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -111,6 +114,16 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   }
 
   const assignment = assignmentQuery.data;
+  const currentSubmissions = assignment.submissions.filter((item) => item.kind === "current");
+  const historicalSubmissions = assignment.submissions.filter((item) => item.kind === "historical");
+  const currentVsCurrentPairs = latestCompletedRun?.pairResults.filter(
+    (pair) => pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "current",
+  ) ?? [];
+  const currentVsHistoricalPairs = latestCompletedRun?.pairResults.filter(
+    (pair) =>
+      (pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "historical")
+      || (pair.leftSubmission.kind === "historical" && pair.rightSubmission.kind === "current"),
+  ) ?? [];
 
   return (
     <div className="page-stack">
@@ -133,6 +146,11 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
           >
             {rerunMutation.isPending ? "Queueing..." : "Run comparison now"}
           </button>
+          {rerunMutation.error ? (
+            <p className="error-text" style={{ width: "100%", margin: 0 }}>
+              {rerunMutation.error.message}
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -187,68 +205,123 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       ) : null}
 
       <section className="panel">
-        <h2>Prepared artifacts</h2>
-        <div className="stats-row">
-          <div className="stat-card">
-            <span>Current submissions</span>
-            <strong>{assignment.submissions.filter((item) => item.kind === "current").length}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Historical submissions</span>
-            <strong>{assignment.submissions.filter((item) => item.kind === "historical").length}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Template version</span>
-            <strong>{assignment.activeTemplate ? `v${assignment.activeTemplate.versionNumber}` : "none"}</strong>
-          </div>
+        <div className="hero-meta">
+          <button
+            className={activeWorkspaceView === "submissions" ? "primary-button" : "secondary-button"}
+            onClick={() => setActiveWorkspaceView("submissions")}
+            type="button"
+          >
+            Submissions
+          </button>
+          <button
+            className={activeWorkspaceView === "pairs" ? "primary-button" : "secondary-button"}
+            onClick={() => setActiveWorkspaceView("pairs")}
+            type="button"
+          >
+            Suspicious pairs
+          </button>
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Upload history</h2>
-        <ul className="compact-list">
-          {assignment.uploadBatches.map((batch) => (
-            <li key={batch.id}>
-              {batch.purpose} · {batch.status}
-              {batch.errorMessage ? ` · ${batch.errorMessage}` : ""}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="panel">
-        <h2>Suspicious pairs</h2>
-        {latestCompletedRun ? (
-          <>
-            <p>
-              Showing run <strong>{latestCompletedRun.id}</strong> with status{" "}
-              <strong>{latestCompletedRun.status}</strong>.
-            </p>
-            <div className="pair-table">
-              <div className="pair-table-head">
-                <span>Left</span>
-                <span>Right</span>
-                <span>Similarity</span>
-                <span>Matches</span>
-                <span>Viewer</span>
+      {activeWorkspaceView === "submissions" ? (
+        <>
+          <section className="panel">
+            <h2>Prepared artifacts</h2>
+            <div className="stats-row">
+              <div className="stat-card">
+                <span>Current submissions</span>
+                <strong>{currentSubmissions.length}</strong>
               </div>
-              {latestCompletedRun.pairResults.map((pair) => (
-                <div className="pair-table-row" key={pair.id}>
-                  <span>{pair.leftSubmission.displayName}</span>
-                  <span>{pair.rightSubmission.displayName}</span>
-                  <span>{pair.similarityScore.toFixed(3)}</span>
-                  <span>{pair.matchCount}</span>
-                  <Link className="text-link" href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}>
-                    Open
-                  </Link>
-                </div>
-              ))}
+              <div className="stat-card">
+                <span>Historical submissions</span>
+                <strong>{historicalSubmissions.length}</strong>
+              </div>
+              <div className="stat-card">
+                <span>Active template</span>
+                <strong>{assignment.activeTemplate ? 1 : 0}</strong>
+              </div>
             </div>
-          </>
-        ) : (
-          <p>No comparison results yet.</p>
-        )}
-      </section>
+          </section>
+
+          <section className="panel">
+            <h2>Upload history</h2>
+            <ul className="compact-list">
+              {assignment.uploadBatches.map((batch) => (
+                <li key={batch.id}>
+                  {batch.purpose} · {batch.status}
+                  {batch.errorMessage ? ` · ${batch.errorMessage}` : ""}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
+      ) : (
+        <section className="panel">
+          <h2>Suspicious pairs</h2>
+          {latestCompletedRun ? (
+            <>
+              <p>
+                Showing run <strong>{latestCompletedRun.id}</strong> with status{" "}
+                <strong>{latestCompletedRun.status}</strong>.
+              </p>
+
+              <h3>Current vs current</h3>
+              {currentVsCurrentPairs.length > 0 ? (
+                <div className="pair-table">
+                  <div className="pair-table-head">
+                    <span>Left</span>
+                    <span>Right</span>
+                    <span>Similarity</span>
+                    <span>Matches</span>
+                    <span>Viewer</span>
+                  </div>
+                  {currentVsCurrentPairs.map((pair) => (
+                    <div className="pair-table-row" key={pair.id}>
+                      <span>{pair.leftSubmission.displayName}</span>
+                      <span>{pair.rightSubmission.displayName}</span>
+                      <span>{pair.similarityScore.toFixed(3)}</span>
+                      <span>{pair.matchCount}</span>
+                      <Link className="text-link" href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}>
+                        Open
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No current vs current pairs in this run.</p>
+              )}
+
+              <h3>Current vs historical</h3>
+              {currentVsHistoricalPairs.length > 0 ? (
+                <div className="pair-table">
+                  <div className="pair-table-head">
+                    <span>Left</span>
+                    <span>Right</span>
+                    <span>Similarity</span>
+                    <span>Matches</span>
+                    <span>Viewer</span>
+                  </div>
+                  {currentVsHistoricalPairs.map((pair) => (
+                    <div className="pair-table-row" key={pair.id}>
+                      <span>{pair.leftSubmission.displayName}</span>
+                      <span>{pair.rightSubmission.displayName}</span>
+                      <span>{pair.similarityScore.toFixed(3)}</span>
+                      <span>{pair.matchCount}</span>
+                      <Link className="text-link" href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}>
+                        Open
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No current vs historical pairs in this run.</p>
+              )}
+            </>
+          ) : (
+            <p>No comparison results yet.</p>
+          )}
+        </section>
+      )}
     </div>
   );
 }

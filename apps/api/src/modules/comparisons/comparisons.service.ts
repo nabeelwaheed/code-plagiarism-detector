@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -35,6 +40,23 @@ export class ComparisonsService {
 
     if (assignment.professorId !== user.id) {
       throw new ForbiddenException("You do not have access to this assignment");
+    }
+
+    const currentSubmissionCount = assignment.submissions.filter(
+      (submission) => submission.kind === "CURRENT",
+    ).length;
+    const historicalSubmissionCount = assignment.submissions.filter(
+      (submission) => submission.kind === "HISTORICAL",
+    ).length;
+
+    if (currentSubmissionCount === 0) {
+      throw new BadRequestException("A comparison run requires at least one current submission.");
+    }
+
+    if (currentSubmissionCount + historicalSubmissionCount < 2) {
+      throw new BadRequestException(
+        "At least two non-template submissions are required to run a comparison.",
+      );
     }
 
     const comparisonRun = await this.prisma.comparisonRun.create({
