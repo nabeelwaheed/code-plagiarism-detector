@@ -26,13 +26,17 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
     <div className="page-stack">
       <section className="hero-card">
         <div>
-          <p className="eyebrow">{pair.assignment.language.toUpperCase()} Pair Review</p>
+          <p className="eyebrow">Pair review</p>
           <h1>
             {pair.leftSubmission.displayName} vs {pair.rightSubmission.displayName}
           </h1>
-          <p>
-            Similarity {pair.similarityScore.toFixed(3)} with {pair.matches.length} matched regions.
+          <p className="subtle-text">
+            Review matched regions for this {pair.assignment.language.toUpperCase()} pair.
           </p>
+          <div className="toolbar-row">
+            <span className="status-badge is-active">{pair.assignment.language.toUpperCase()}</span>
+            <span className="pill">Assignment: {pair.assignment.title}</span>
+          </div>
         </div>
         <Link className="secondary-button as-link" href={`/professor/assignments/${pair.assignment.id}`}>
           Back to assignment
@@ -40,11 +44,46 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
       </section>
 
       <section className="panel">
+        <div className="pair-review-layout">
+          <div className="pair-review-metrics">
+            <div className="metric-card">
+              <span>Similarity</span>
+              <strong>{pair.similarityScore.toFixed(3)}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Matched regions</span>
+              <strong>{pair.matches.length}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Matched tokens</span>
+              <strong>{pair.matchedTokenCount}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Comment score</span>
+              <strong>
+                {pair.commentScore === null ? "N/A" : pair.commentScore.toFixed(3)}
+              </strong>
+            </div>
+          </div>
+
+          <div className="surface-muted stack-sm">
+            <strong>How to review</strong>
+            <p className="pair-note">
+              Click a highlighted match in either editor, or use the match chips below, to jump to the
+              same region on both sides.
+            </p>
+          </div>
+
+        </div>
         <EvidenceViewer
           language={pair.assignment.language}
           leftSource={pair.leftSubmission.concatenatedSource}
           rightSource={pair.rightSubmission.concatenatedSource}
           matches={pair.matches}
+          leftTitle={pair.leftSubmission.displayName}
+          rightTitle={pair.rightSubmission.displayName}
+          leftLabel={pair.leftSubmission.kind}
+          rightLabel={pair.rightSubmission.kind}
         />
       </section>
     </div>

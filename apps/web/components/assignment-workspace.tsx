@@ -122,13 +122,14 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     },
   });
 
-  const latestCompletedRun = useMemo(
+  const latestVisibleRun = useMemo(
     () =>
       assignmentQuery.data?.comparisonRuns.find(
         (run) => run.status === "completed" && run.pairResults.length > 0,
       ) ?? assignmentQuery.data?.comparisonRuns[0],
     [assignmentQuery.data],
   );
+  const latestRun = assignmentQuery.data?.comparisonRuns[0] ?? null;
 
   const handleHistoricalSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -159,61 +160,105 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   }
 
   if (assignmentQuery.error || !assignmentQuery.data) {
-    return <p className="panel error-text">{assignmentQuery.error?.message ?? "That assignment no longer exists."}</p>;
+    return (
+      <p className="panel error-text">
+        {assignmentQuery.error?.message ?? "That assignment no longer exists."}
+      </p>
+    );
   }
 
   const assignment = assignmentQuery.data;
   const currentSubmissions = assignment.submissions.filter((item) => item.kind === "current");
   const historicalSubmissions = assignment.submissions.filter((item) => item.kind === "historical");
-  const currentVsCurrentPairs = latestCompletedRun?.pairResults.filter(
+  const latestUpload = trackedUploadQuery.data ?? assignment.uploadBatches[0] ?? null;
+  const currentVsCurrentPairs = latestVisibleRun?.pairResults.filter(
     (pair) => pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "current",
   ) ?? [];
-  const currentVsHistoricalPairs = latestCompletedRun?.pairResults.filter(
+  const currentVsHistoricalPairs = latestVisibleRun?.pairResults.filter(
     (pair) =>
       (pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "historical")
       || (pair.leftSubmission.kind === "historical" && pair.rightSubmission.kind === "current"),
   ) ?? [];
   const visiblePairs =
     activePairCategory === "current-current" ? currentVsCurrentPairs : currentVsHistoricalPairs;
+  const selectedArtifactKey = selectedArtifact ? `${selectedArtifact.type}:${selectedArtifact.id}` : null;
 
   return (
     <div className="page-stack">
       <section className="hero-card">
         <div>
-          <p className="eyebrow">{assignment.language.toUpperCase()} Assignment</p>
+          <p className="eyebrow">Assignment workspace</p>
           <h1>{assignment.title}</h1>
-          <p>
-            Student submissions join this assignment through the public keyID. Historical archives
-            and template code are prepared separately and fed into the comparison flow automatically.
+          <p className="subtle-text">
+            Manage uploads, browse files, and review suspicious pairs for this {" "}
+            {assignment.language.toUpperCase()} assignment.
           </p>
+          <div className="toolbar-row">
+            <span className="status-badge is-active">{assignment.language.toUpperCase()}</span>
+            <span className="pill mono">{assignment.keys[0]?.publicKey ?? "No key yet"}</span>
+          </div>
         </div>
-        <div className="hero-meta">
-          <span className="pill">{assignment.keys[0]?.publicKey ?? "No key"}</span>
-          <button
-            className="secondary-button"
-            disabled={rerunMutation.isPending}
-            onClick={() => rerunMutation.mutate()}
-            type="button"
-          >
-            {rerunMutation.isPending ? "Queueing..." : "Run comparison now"}
-          </button>
+
+        <div className="section-stack">
+          <div className="surface-muted stack-sm">
+            <span className="muted-text">Comparison</span>
+            <div className="meta-line">
+              <span className={`status-badge ${getStatusClassName(latestRun?.status)}`}>
+                {latestRun ? formatStatusLabel(latestRun.status) : "No runs yet"}
+              </span>
+              {latestRun ? (
+                <>
+                  <span className="meta-dot" />
+                  <span>
+                    {latestRun.pairResults.length} {latestRun.pairResults.length === 1 ? "pair" : "pairs"}
+                  </span>
+                </>
+              ) : null}
+            </div>
+            <button
+              className="primary-button"
+              disabled={rerunMutation.isPending}
+              onClick={() => rerunMutation.mutate()}
+              type="button"
+            >
+              {rerunMutation.isPending ? "Queueing..." : "Run comparison"}
+            </button>
+          </div>
+
           {rerunMutation.error ? (
-            <p className="error-text" style={{ width: "100%", margin: 0 }}>
-              {rerunMutation.error.message}
-            </p>
+            <div className="alert alert-error">
+              <p>{rerunMutation.error.message}</p>
+            </div>
           ) : null}
         </div>
       </section>
 
       <div className="split-grid">
         <section className="panel">
-          <h2>Historical Upload</h2>
+          <div className="stack-sm">
+            <div>
+              <p className="eyebrow">Upload</p>
+              <h2>Historical submissions</h2>
+            </div>
+            <p className="subtle-text">
+              Upload one parent archive. First-layer child zip files become submissions.
+            </p>
+          </div>
+
           <form className="form-stack" onSubmit={handleHistoricalSubmit}>
-            <input
-              type="file"
-              accept=".zip"
-              onChange={(event) => setHistoricalFile(event.target.files?.[0] ?? null)}
-            />
+            <label className="field">
+              <span>Zip archive</span>
+              <input
+                type="file"
+                accept=".zip"
+                onChange={(event) => setHistoricalFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            {historicalFile ? (
+              <p className="muted-text">Selected: {historicalFile.name}</p>
+            ) : (
+              <p className="muted-text">Choose a single zip file.</p>
+            )}
             <button
               className="primary-button"
               disabled={!historicalFile || historicalUploadMutation.isPending}
@@ -225,13 +270,30 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
         </section>
 
         <section className="panel">
-          <h2>Template Upload</h2>
+          <div className="stack-sm">
+            <div>
+              <p className="eyebrow">Upload</p>
+              <h2>Template code</h2>
+            </div>
+            <p className="subtle-text">
+              Upload starter code or provided files. Template code stays separate from pair review.
+            </p>
+          </div>
+
           <form className="form-stack" onSubmit={handleTemplateSubmit}>
-            <input
-              type="file"
-              accept=".zip"
-              onChange={(event) => setTemplateFile(event.target.files?.[0] ?? null)}
-            />
+            <label className="field">
+              <span>Zip archive</span>
+              <input
+                type="file"
+                accept=".zip"
+                onChange={(event) => setTemplateFile(event.target.files?.[0] ?? null)}
+              />
+            </label>
+            {templateFile ? (
+              <p className="muted-text">Selected: {templateFile.name}</p>
+            ) : (
+              <p className="muted-text">Choose a single zip file.</p>
+            )}
             <button
               className="primary-button"
               disabled={!templateFile || templateUploadMutation.isPending}
@@ -243,34 +305,58 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
         </section>
       </div>
 
-      {trackedUploadQuery.data ? (
+      {latestUpload ? (
         <section className="panel">
-          <p className="eyebrow">Latest processed upload</p>
-          <p>
-            {trackedUploadQuery.data.purpose} is currently <strong>{trackedUploadQuery.data.status}</strong>.
-          </p>
-          {trackedUploadQuery.data.errorMessage ? (
-            <p className="error-text">{trackedUploadQuery.data.errorMessage}</p>
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Latest upload</p>
+              <h2>{formatUploadPurpose(latestUpload.purpose)}</h2>
+              <p className="subtle-text">
+                {getUploadSummary(latestUpload.status, latestUpload.errorMessage)}
+              </p>
+            </div>
+            <span className={`status-badge ${getStatusClassName(latestUpload.status)}`}>
+              {formatStatusLabel(latestUpload.status)}
+            </span>
+          </div>
+
+          {latestUpload.errorMessage ? (
+            <div className="history-details">
+              {shouldCollapseMessage(latestUpload.errorMessage) ? (
+                <details>
+                  <summary>View full message</summary>
+                  <p>{latestUpload.errorMessage}</p>
+                </details>
+              ) : (
+                <p>{latestUpload.errorMessage}</p>
+              )}
+            </div>
           ) : null}
         </section>
       ) : null}
 
       <section className="panel">
-        <div className="hero-meta">
-          <button
-            className={activeWorkspaceView === "submissions" ? "primary-button" : "secondary-button"}
-            onClick={() => setActiveWorkspaceView("submissions")}
-            type="button"
-          >
-            Submissions
-          </button>
-          <button
-            className={activeWorkspaceView === "pairs" ? "primary-button" : "secondary-button"}
-            onClick={() => setActiveWorkspaceView("pairs")}
-            type="button"
-          >
-            Suspicious pairs
-          </button>
+        <div className="section-heading">
+          <div>
+            <h2>Workspace</h2>
+            <p className="subtle-text">Switch between files and suspicious pairs.</p>
+          </div>
+          <div className="segmented-control" role="tablist" aria-label="Workspace view">
+            <button
+              className={`segmented-option ${activeWorkspaceView === "submissions" ? "is-active" : ""}`}
+              onClick={() => setActiveWorkspaceView("submissions")}
+              type="button"
+            >
+              Submissions
+            </button>
+            <button
+              className={`segmented-option ${activeWorkspaceView === "pairs" ? "is-active" : ""}`}
+              onClick={() => setActiveWorkspaceView("pairs")}
+              type="button"
+            >
+              Suspicious pairs
+            </button>
+          </div>
         </div>
       </section>
 
@@ -279,10 +365,9 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
           <section className="panel">
             <div className="section-heading">
               <div>
-                <h2>Prepared artifacts</h2>
-                <p>
-                  Browse current submissions, historical submissions, and the active template for
-                  this assignment.
+                <h2>Files</h2>
+                <p className="subtle-text">
+                  Current submissions, historical submissions, and template code for this assignment.
                 </p>
               </div>
               <button
@@ -294,9 +379,13 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 {downloadMutation.isPending ? "Preparing..." : "Download all submissions"}
               </button>
             </div>
+
             {downloadMutation.error ? (
-              <p className="error-text">{downloadMutation.error.message}</p>
+              <div className="alert alert-error">
+                <p>{downloadMutation.error.message}</p>
+              </div>
             ) : null}
+
             <div className="stats-row">
               <div className="stat-card">
                 <span>Current submissions</span>
@@ -307,7 +396,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 <strong>{historicalSubmissions.length}</strong>
               </div>
               <div className="stat-card">
-                <span>Active template</span>
+                <span>Template code</span>
                 <strong>{assignment.activeTemplate ? 1 : 0}</strong>
               </div>
             </div>
@@ -315,19 +404,37 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
           <div className="split-grid">
             <section className="panel">
-              <h2>Current</h2>
+              <div className="section-heading">
+                <div>
+                  <h2>Current</h2>
+                  <p className="subtle-text">Student submissions uploaded for this assignment.</p>
+                </div>
+                <span className="status-badge">{currentSubmissions.length}</span>
+              </div>
               {currentSubmissions.length > 0 ? (
                 <div className="card-grid">
                   {currentSubmissions.map((submission) => (
-                    <article className="assignment-card" key={submission.id}>
-                      <div>
-                        <p className="eyebrow">{submission.fileCount} files</p>
+                    <article
+                      className={`assignment-card${selectedArtifactKey === `submission:${submission.id}` ? " is-selected" : ""}`}
+                      key={submission.id}
+                    >
+                      <div className="stack-sm">
+                        <p className="eyebrow">Current submission</p>
                         <h3>{submission.displayName}</h3>
-                        <p>Created {new Date(submission.createdAt).toLocaleString()}</p>
+                        <div className="meta-line">
+                          <span>{submission.fileCount} files</span>
+                          <span className="meta-dot" />
+                          <span>{formatDateTime(submission.createdAt)}</span>
+                        </div>
                       </div>
-                      <div className="hero-meta">
+
+                      <div className="card-actions">
                         <button
-                          className="secondary-button"
+                          className={
+                            selectedArtifactKey === `submission:${submission.id}`
+                              ? "primary-button"
+                              : "secondary-button"
+                          }
                           onClick={() => setSelectedArtifact({ type: "submission", id: submission.id })}
                           type="button"
                         >
@@ -336,7 +443,9 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                         <button
                           className="secondary-button"
                           disabled={downloadMutation.isPending}
-                          onClick={() => downloadMutation.mutate({ type: "submission", id: submission.id })}
+                          onClick={() =>
+                            downloadMutation.mutate({ type: "submission", id: submission.id })
+                          }
                           type="button"
                         >
                           Download
@@ -346,24 +455,44 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   ))}
                 </div>
               ) : (
-                <p>No current submissions yet.</p>
+                <div className="empty-state">
+                  <p>No current submissions yet.</p>
+                </div>
               )}
             </section>
 
             <section className="panel">
-              <h2>Historical</h2>
+              <div className="section-heading">
+                <div>
+                  <h2>Historical</h2>
+                  <p className="subtle-text">Past submissions used for current-to-historical review.</p>
+                </div>
+                <span className="status-badge">{historicalSubmissions.length}</span>
+              </div>
               {historicalSubmissions.length > 0 ? (
                 <div className="card-grid">
                   {historicalSubmissions.map((submission) => (
-                    <article className="assignment-card" key={submission.id}>
-                      <div>
-                        <p className="eyebrow">{submission.fileCount} files</p>
+                    <article
+                      className={`assignment-card${selectedArtifactKey === `submission:${submission.id}` ? " is-selected" : ""}`}
+                      key={submission.id}
+                    >
+                      <div className="stack-sm">
+                        <p className="eyebrow">Historical submission</p>
                         <h3>{submission.displayName}</h3>
-                        <p>Created {new Date(submission.createdAt).toLocaleString()}</p>
+                        <div className="meta-line">
+                          <span>{submission.fileCount} files</span>
+                          <span className="meta-dot" />
+                          <span>{formatDateTime(submission.createdAt)}</span>
+                        </div>
                       </div>
-                      <div className="hero-meta">
+
+                      <div className="card-actions">
                         <button
-                          className="secondary-button"
+                          className={
+                            selectedArtifactKey === `submission:${submission.id}`
+                              ? "primary-button"
+                              : "secondary-button"
+                          }
                           onClick={() => setSelectedArtifact({ type: "submission", id: submission.id })}
                           type="button"
                         >
@@ -372,7 +501,9 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                         <button
                           className="secondary-button"
                           disabled={downloadMutation.isPending}
-                          onClick={() => downloadMutation.mutate({ type: "submission", id: submission.id })}
+                          onClick={() =>
+                            downloadMutation.mutate({ type: "submission", id: submission.id })
+                          }
                           type="button"
                         >
                           Download
@@ -382,26 +513,44 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   ))}
                 </div>
               ) : (
-                <p>No historical submissions yet.</p>
+                <div className="empty-state">
+                  <p>No historical submissions yet.</p>
+                </div>
               )}
             </section>
 
             <section className="panel">
-              <h2>Template</h2>
+              <div className="section-heading">
+                <div>
+                  <h2>Template</h2>
+                  <p className="subtle-text">Starter code and provided files kept out of pair scoring.</p>
+                </div>
+                <span className={`status-badge ${assignment.activeTemplate ? "is-active" : ""}`}>
+                  {assignment.activeTemplate ? "Active" : "Missing"}
+                </span>
+              </div>
               {assignment.activeTemplate ? (
                 <div className="card-grid">
-                  <article className="assignment-card">
-                    <div>
-                      <p className="eyebrow">Version {assignment.activeTemplate.versionNumber}</p>
-                      <h3>Active template</h3>
-                      <p>
-                        {assignment.activeTemplate.fileCount} files · created{" "}
-                        {new Date(assignment.activeTemplate.createdAt).toLocaleString()}
-                      </p>
+                  <article
+                    className={`assignment-card${selectedArtifactKey === `template:${assignment.activeTemplate.id}` ? " is-selected" : ""}`}
+                  >
+                    <div className="stack-sm">
+                      <p className="eyebrow">Template code</p>
+                      <h3>Version {assignment.activeTemplate.versionNumber}</h3>
+                      <div className="meta-line">
+                        <span>{assignment.activeTemplate.fileCount} files</span>
+                        <span className="meta-dot" />
+                        <span>{formatDateTime(assignment.activeTemplate.createdAt)}</span>
+                      </div>
                     </div>
-                    <div className="hero-meta">
+
+                    <div className="card-actions">
                       <button
-                        className="secondary-button"
+                        className={
+                          selectedArtifactKey === `template:${assignment.activeTemplate.id}`
+                            ? "primary-button"
+                            : "secondary-button"
+                        }
                         onClick={() =>
                           setSelectedArtifact({
                             type: "template",
@@ -429,125 +578,223 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   </article>
                 </div>
               ) : (
-                <p>No active template uploaded yet.</p>
+                <div className="empty-state">
+                  <p>No template code uploaded yet.</p>
+                </div>
               )}
             </section>
           </div>
 
           <section className="panel">
-            <h2>Upload history</h2>
-            <ul className="compact-list">
-              {assignment.uploadBatches.map((batch) => (
-                <li key={batch.id}>
-                  {batch.purpose} · {batch.status}
-                  {batch.errorMessage ? ` · ${batch.errorMessage}` : ""}
-                </li>
-              ))}
-            </ul>
+            <div className="section-heading">
+              <div>
+                <h2>Viewer</h2>
+                <p className="subtle-text">Open a submission or template to inspect files and source content.</p>
+              </div>
+              {artifactDetailQuery.data ? (
+                <button
+                  className="secondary-button"
+                  disabled={downloadMutation.isPending}
+                  onClick={() =>
+                    artifactDetailQuery.data.kind === "template"
+                      ? downloadMutation.mutate({
+                          type: "template",
+                          id: artifactDetailQuery.data.id,
+                        })
+                      : downloadMutation.mutate({
+                          type: "submission",
+                          id: artifactDetailQuery.data.id,
+                        })
+                  }
+                  type="button"
+                >
+                  Download
+                </button>
+              ) : null}
+            </div>
+            {!selectedArtifact ? (
+              <div className="empty-state viewer-empty">
+                <p>Select a submission or template to open it here.</p>
+              </div>
+            ) : artifactDetailQuery.isLoading ? (
+              <div className="empty-state viewer-empty">
+                <p>Loading viewer...</p>
+              </div>
+            ) : artifactDetailQuery.error ? (
+              <div className="alert alert-error">
+                <p>{artifactDetailQuery.error.message}</p>
+              </div>
+            ) : artifactDetailQuery.data ? (
+              <div className="file-viewer">
+                <div className="artifact-header">
+                  <div className="stack-sm">
+                    <div>
+                      <p className="eyebrow">
+                        {artifactDetailQuery.data.kind === "template"
+                          ? `Template code v${artifactDetailQuery.data.versionNumber ?? 1}`
+                          : `${capitalizeLabel(artifactDetailQuery.data.kind)} submission`}
+                      </p>
+                      <h3>{artifactDetailQuery.data.displayName}</h3>
+                    </div>
+                    <div className="meta-line">
+                      <span>{artifactDetailQuery.data.fileCount} files</span>
+                      <span className="meta-dot" />
+                      <span>{formatDateTime(artifactDetailQuery.data.createdAt)}</span>
+                    </div>
+                  </div>
+                  <span className={`status-badge ${artifactDetailQuery.data.kind === "template" ? "is-active" : ""}`}>
+                    {artifactDetailQuery.data.kind === "template"
+                      ? "Template"
+                      : capitalizeLabel(artifactDetailQuery.data.kind)}
+                  </span>
+                </div>
+
+                <div className="artifact-files">
+                  {artifactDetailQuery.data.files.map((file) => {
+                    const isJunk = isLikelyJunkFile(file.relativePath, file.archivePath);
+
+                    return (
+                      <article
+                        className={`artifact-file-card${isJunk ? " is-junk" : ""}`}
+                        key={file.id}
+                      >
+                        <div className="artifact-file-head">
+                          <div>
+                            <span className="artifact-subpath">{file.archivePath ?? "Source file"}</span>
+                            <span className="artifact-file-path mono">{file.relativePath}</span>
+                          </div>
+                          <span className={`status-badge ${isJunk ? "" : "is-active"}`}>
+                            {isJunk ? "System file" : "Source"}
+                          </span>
+                        </div>
+
+                        <div className="code-surface">
+                          <div className="code-surface-head">
+                            <span className="mono">{file.relativePath}</span>
+                            <div className="dots" aria-hidden="true">
+                              <span />
+                              <span />
+                              <span />
+                            </div>
+                          </div>
+                          <pre>{file.contents}</pre>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state viewer-empty">
+                <p>Select a submission or template to open it here.</p>
+              </div>
+            )}
           </section>
 
           <section className="panel">
-            <h2>Selected artifact</h2>
-            {!selectedArtifact ? (
-              <p>Select a submission or template to view its contents.</p>
-            ) : artifactDetailQuery.isLoading ? (
-              <p>Loading artifact...</p>
-            ) : artifactDetailQuery.error ? (
-              <p className="error-text">{artifactDetailQuery.error.message}</p>
-            ) : artifactDetailQuery.data ? (
-              <div className="page-stack">
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">
-                      {artifactDetailQuery.data.kind === "template"
-                        ? `Template v${artifactDetailQuery.data.versionNumber ?? 1}`
-                        : `${artifactDetailQuery.data.kind} submission`}
-                    </p>
-                    <h3>{artifactDetailQuery.data.displayName}</h3>
-                    <p>
-                      {artifactDetailQuery.data.fileCount} files · created{" "}
-                      {new Date(artifactDetailQuery.data.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <button
-                    className="secondary-button"
-                    disabled={downloadMutation.isPending}
-                    onClick={() =>
-                      artifactDetailQuery.data.kind === "template"
-                        ? downloadMutation.mutate({
-                            type: "template",
-                            id: artifactDetailQuery.data.id,
-                          })
-                        : downloadMutation.mutate({
-                            type: "submission",
-                            id: artifactDetailQuery.data.id,
-                          })
-                    }
-                    type="button"
-                  >
-                    Download
-                  </button>
-                </div>
+            <div className="section-heading">
+              <div>
+                <h2>Recent uploads</h2>
+                <p className="subtle-text">Recent upload batches and status updates for this assignment.</p>
+              </div>
+            </div>
+            {assignment.uploadBatches.length > 0 ? (
+              <div className="history-list">
+                {assignment.uploadBatches.map((batch) => {
+                  const message = batch.errorMessage?.trim() ?? "";
 
-                {artifactDetailQuery.data.files.map((file) => (
-                  <article className="assignment-card" key={file.id}>
-                    <div>
-                      <p className="eyebrow">{file.archivePath ?? "prepared source file"}</p>
-                      <h3>{file.relativePath}</h3>
-                    </div>
-                    <pre
-                      style={{
-                        margin: 0,
-                        overflowX: "auto",
-                        whiteSpace: "pre-wrap",
-                        background: "#fffdf7",
-                        border: "1px solid rgba(217, 210, 192, 0.6)",
-                        borderRadius: "12px",
-                        padding: "12px 14px",
-                      }}
-                    >
-                      {file.contents}
-                    </pre>
-                  </article>
-                ))}
+                  return (
+                    <article className="history-item" key={batch.id}>
+                      <div className="history-top">
+                        <div>
+                          <strong>{formatUploadPurpose(batch.purpose)}</strong>
+                          <div className="meta-line">
+                            <span>{formatDateTime(batch.createdAt)}</span>
+                            <span className="meta-dot" />
+                            <span>Updated {formatDateTime(batch.updatedAt)}</span>
+                          </div>
+                        </div>
+                        <span className={`status-badge ${getStatusClassName(batch.status)}`}>
+                          {formatStatusLabel(batch.status)}
+                        </span>
+                      </div>
+                      <p className="history-message">{getUploadSummary(batch.status, batch.errorMessage)}</p>
+                      {message ? (
+                        <div className="history-details">
+                          {shouldCollapseMessage(message) ? (
+                            <details>
+                              <summary>View full message</summary>
+                              <p>{message}</p>
+                            </details>
+                          ) : (
+                            <p>{message}</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
               </div>
             ) : (
-              <p>Select a submission or template to view its contents.</p>
+              <div className="empty-state">
+                <p>No uploads yet.</p>
+              </div>
             )}
           </section>
         </>
       ) : (
         <section className="panel">
-          <h2>Suspicious pairs</h2>
-          {latestCompletedRun ? (
-            <>
-              <p>
-                Showing run <strong>{latestCompletedRun.id}</strong> with status{" "}
-                <strong>{latestCompletedRun.status}</strong>.
-              </p>
+          <div className="section-heading">
+            <div>
+              <h2>Suspicious pairs</h2>
+              <p className="subtle-text">Review the latest eligible comparison results for this assignment.</p>
+            </div>
+            <div className="segmented-control" role="tablist" aria-label="Pair category">
+              <button
+                className={`segmented-option ${activePairCategory === "current-current" ? "is-active" : ""}`}
+                onClick={() => setActivePairCategory("current-current")}
+                type="button"
+              >
+                Current vs current
+              </button>
+              <button
+                className={`segmented-option ${activePairCategory === "current-historical" ? "is-active" : ""}`}
+                onClick={() => setActivePairCategory("current-historical")}
+                type="button"
+              >
+                Current vs historical
+              </button>
+            </div>
+          </div>
 
-              <div className="hero-meta">
-                <button
-                  className={activePairCategory === "current-current" ? "primary-button" : "secondary-button"}
-                  onClick={() => setActivePairCategory("current-current")}
-                  type="button"
-                >
-                  Current vs current
-                </button>
-                <button
-                  className={activePairCategory === "current-historical" ? "primary-button" : "secondary-button"}
-                  onClick={() => setActivePairCategory("current-historical")}
-                  type="button"
-                >
-                  Current vs historical
-                </button>
+          {latestVisibleRun ? (
+            <div className="section-stack">
+              <div className="surface-muted stack-sm">
+                <div className="meta-line">
+                  <span className={`status-badge ${getStatusClassName(latestVisibleRun.status)}`}>
+                    {formatStatusLabel(latestVisibleRun.status)}
+                  </span>
+                  <span className="meta-dot" />
+                  <span>Latest run: {latestVisibleRun.id}</span>
+                  <span className="meta-dot" />
+                  <span>
+                    {visiblePairs.length} {visiblePairs.length === 1 ? "pair" : "pairs"} in this view
+                  </span>
+                </div>
+                {latestVisibleRun.errorMessage ? (
+                  <div className="history-details">
+                    {shouldCollapseMessage(latestVisibleRun.errorMessage) ? (
+                      <details>
+                        <summary>View full message</summary>
+                        <p>{latestVisibleRun.errorMessage}</p>
+                      </details>
+                    ) : (
+                      <p>{latestVisibleRun.errorMessage}</p>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
-              <h3>
-                {activePairCategory === "current-current"
-                  ? "Current vs current"
-                  : "Current vs historical"}
-              </h3>
               {visiblePairs.length > 0 ? (
                 <div className="pair-table">
                   <div className="pair-table-head">
@@ -559,29 +806,152 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   </div>
                   {visiblePairs.map((pair) => (
                     <div className="pair-table-row" key={pair.id}>
-                      <span>{pair.leftSubmission.displayName}</span>
-                      <span>{pair.rightSubmission.displayName}</span>
-                      <span>{pair.similarityScore.toFixed(3)}</span>
-                      <span>{pair.matchCount}</span>
-                      <Link className="text-link" href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}>
+                      <div className="stack-sm">
+                        <strong>{pair.leftSubmission.displayName}</strong>
+                        <span className="pair-note">{capitalizeLabel(pair.leftSubmission.kind)}</span>
+                      </div>
+                      <div className="stack-sm">
+                        <strong>{pair.rightSubmission.displayName}</strong>
+                        <span className="pair-note">{capitalizeLabel(pair.rightSubmission.kind)}</span>
+                      </div>
+                      <span className="pair-value">{pair.similarityScore.toFixed(3)}</span>
+                      <span className="pair-value">{pair.matchCount}</span>
+                      <Link
+                        className="secondary-button as-link"
+                        href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}
+                      >
                         Open
                       </Link>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p>
-                  {activePairCategory === "current-current"
-                    ? "No current vs current pairs in this run."
-                    : "No current vs historical pairs in this run."}
-                </p>
+                <div className="empty-state">
+                  <p>
+                    {activePairCategory === "current-current"
+                      ? "No current vs current pairs in this run."
+                      : "No current vs historical pairs in this run."}
+                  </p>
+                </div>
               )}
-            </>
+            </div>
           ) : (
-            <p>No comparison results yet.</p>
+            <div className="empty-state">
+              <p>No results yet.</p>
+            </div>
           )}
         </section>
       )}
     </div>
   );
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString();
+}
+
+function formatUploadPurpose(purpose: string) {
+  if (purpose === "historical_submission") {
+    return "Historical submissions";
+  }
+
+  if (purpose === "template_upload") {
+    return "Template code";
+  }
+
+  return capitalizeLabel(purpose.replace(/[_-]+/g, " "));
+}
+
+function formatStatusLabel(status: string) {
+  return capitalizeLabel(status.replace(/[_-]+/g, " "));
+}
+
+function getStatusClassName(status?: string | null) {
+  const normalized = status?.toLowerCase() ?? "";
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.includes("ready") || normalized.includes("completed") || normalized.includes("active")) {
+    return "is-ready";
+  }
+
+  if (normalized.includes("failed")) {
+    return "is-failed";
+  }
+
+  if (normalized.includes("running") || normalized.includes("processing")) {
+    return "is-running";
+  }
+
+  if (normalized.includes("queued")) {
+    return "is-queued";
+  }
+
+  return "";
+}
+
+function getUploadSummary(status: string, errorMessage: string | null) {
+  if (errorMessage) {
+    return summarizeMessage(errorMessage, "There was a problem with this upload.");
+  }
+
+  const normalized = status.toLowerCase();
+
+  if (normalized === "ready" || normalized === "completed") {
+    return "This upload finished successfully.";
+  }
+
+  if (normalized === "failed") {
+    return "This upload did not finish successfully.";
+  }
+
+  if (normalized === "queued") {
+    return "This upload is waiting to be processed.";
+  }
+
+  if (normalized === "processing" || normalized === "running") {
+    return "This upload is still being processed.";
+  }
+
+  return "Status updated.";
+}
+
+function summarizeMessage(message: string, fallback: string) {
+  const trimmed = message.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  if (!shouldCollapseMessage(trimmed)) {
+    return trimmed;
+  }
+
+  const firstLine = trimmed.split(/\r?\n/, 1)[0]?.trim() ?? "";
+  if (firstLine && firstLine.length <= 120 && !looksTechnical(firstLine)) {
+    return firstLine;
+  }
+
+  return fallback;
+}
+
+function shouldCollapseMessage(message: string) {
+  const trimmed = message.trim();
+  return trimmed.length > 120 || /[\r\n]/.test(trimmed) || looksTechnical(trimmed);
+}
+
+function looksTechnical(message: string) {
+  return /(exception|traceback|stack|invalid byte sequence|prisma|postgres|errno| at |\\|\/|0x[0-9a-f]+)/i.test(
+    message,
+  );
+}
+
+function isLikelyJunkFile(relativePath: string, archivePath?: string) {
+  const candidate = `${relativePath} ${archivePath ?? ""}`;
+  return /(^|[\\/])__macosx([\\/]|$)|(^|[\\/])\._|(^|[\\/])\.ds_store$|thumbs\.db$/i.test(candidate);
+}
+
+function capitalizeLabel(value: string) {
+  return value.replace(/\b\w/g, (character) => character.toUpperCase());
 }

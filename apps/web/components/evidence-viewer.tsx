@@ -16,6 +16,10 @@ interface EvidenceViewerProps {
   leftSource: string;
   rightSource: string;
   matches: ViewerMatch[];
+  leftTitle?: string;
+  rightTitle?: string;
+  leftLabel?: string;
+  rightLabel?: string;
 }
 
 const PALETTE = ["#d9480f", "#0f766e", "#2563eb", "#c026d3", "#ca8a04", "#4338ca"];
@@ -25,6 +29,10 @@ export function EvidenceViewer({
   leftSource,
   rightSource,
   matches,
+  leftTitle = "Left submission",
+  rightTitle = "Right submission",
+  leftLabel = "Left side",
+  rightLabel = "Right side",
 }: EvidenceViewerProps) {
   const leftEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const rightEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -198,48 +206,85 @@ export function EvidenceViewer({
   };
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className="evidence-shell">
       <style>{dynamicStyles}</style>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <Editor
-          height="70vh"
-          defaultLanguage={language}
-          value={leftSource}
-          onMount={(editor, monaco) => {
-            leftEditorRef.current = editor;
-            monacoRef.current = monaco;
-          }}
-          options={{ readOnly: true, minimap: { enabled: false } }}
-        />
-        <Editor
-          height="70vh"
-          defaultLanguage={language}
-          value={rightSource}
-          onMount={(editor, monaco) => {
-            rightEditorRef.current = editor;
-            monacoRef.current = monaco;
-          }}
-          options={{ readOnly: true, minimap: { enabled: false } }}
-        />
+      <div className="evidence-grid">
+        <div className="evidence-pane">
+          <div className="evidence-pane-head">
+            <strong>{leftTitle}</strong>
+            <span>
+              {leftLabel} - click a highlighted region to jump to its pair
+            </span>
+          </div>
+          <Editor
+            height="68vh"
+            defaultLanguage={language}
+            value={leftSource}
+            onMount={(editor, monaco) => {
+              leftEditorRef.current = editor;
+              monacoRef.current = monaco;
+            }}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              lineNumbersMinChars: 3,
+              padding: { top: 14, bottom: 14 },
+              fontSize: 13,
+            }}
+            theme="vs-dark"
+          />
+        </div>
+
+        <div className="evidence-pane">
+          <div className="evidence-pane-head">
+            <strong>{rightTitle}</strong>
+            <span>
+              {rightLabel} - colors stay matched on both sides
+            </span>
+          </div>
+          <Editor
+            height="68vh"
+            defaultLanguage={language}
+            value={rightSource}
+            onMount={(editor, monaco) => {
+              rightEditorRef.current = editor;
+              monacoRef.current = monaco;
+            }}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              lineNumbersMinChars: 3,
+              padding: { top: 14, bottom: 14 },
+              fontSize: 13,
+            }}
+            theme="vs-dark"
+          />
+        </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="evidence-legend">
+        <div className="stack-sm">
+          <strong>Matches</strong>
+          <span className="pair-note">Select a match chip to jump to the same region on both sides.</span>
+        </div>
+        <div className="legend-grid">
         {matches.map((match) => (
           <button
             key={match.matchId}
             type="button"
             onClick={() => revealFromLegend(match.matchId)}
-            style={{
-              border: "1px solid #d9d2c0",
-              background: colors.get(match.matchId),
-              color: "#fff",
-              padding: "8px 12px",
-              cursor: "pointer",
-            }}
+            className="legend-button"
           >
+            <span
+              className="legend-swatch"
+              style={{ background: colors.get(match.matchId) }}
+            />
             {match.matchId}
           </button>
         ))}
+        </div>
       </div>
     </div>
   );
