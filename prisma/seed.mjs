@@ -17,19 +17,6 @@ async function main() {
     },
   });
 
-  await prisma.user.upsert({
-    where: { email: "student@example.com" },
-    update: {
-      passwordHash: hashPassword("student123"),
-      role: UserRole.STUDENT,
-    },
-    create: {
-      email: "student@example.com",
-      passwordHash: hashPassword("student123"),
-      role: UserRole.STUDENT,
-    },
-  });
-
   const assignment = await prisma.assignment.upsert({
     where: { id: "demo-assignment" },
     update: {

@@ -5,11 +5,12 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   Res,
 } from "@nestjs/common";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { CurrentUser, Roles } from "../auth/auth.decorators.js";
+import { CurrentUser, Public, Roles } from "../auth/auth.decorators.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { SubmissionsService } from "./submissions.service.js";
 import { CreateUploadBatchDto } from "./dto/create-upload-batch.dto.js";
@@ -73,6 +74,47 @@ export class SubmissionsController {
       archiveBuffer,
       user,
     });
+  }
+
+  @Public()
+  @Get("public/identity-key")
+  getPublicSubmissionIdentityKey() {
+    return this.submissionsService.getPublicSubmissionIdentityKey();
+  }
+
+  @Public()
+  @Post("public/student/archive")
+  async createPublicStudentSubmissionArchive(@Req() request: FastifyRequest) {
+    const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
+      "assignmentKey",
+      "encryptedIdentity",
+    ]);
+
+    return this.submissionsService.createPublicStudentSubmissionFromArchive({
+      assignmentKey: fields.assignmentKey,
+      encryptedIdentity: fields.encryptedIdentity,
+      fileName,
+      archiveBuffer,
+    });
+  }
+
+  @Public()
+  @Get("public/:uploadBatchId")
+  getPublicUploadBatch(
+    @Param("uploadBatchId") uploadBatchId: string,
+    @Query("token") token: string | undefined,
+  ) {
+    return this.submissionsService.getPublicUploadBatch(uploadBatchId, token);
+  }
+
+  @Roles("professor")
+  @Get("assignment/:assignmentId/submissions/:submissionId/identity")
+  revealSubmissionIdentity(
+    @Param("assignmentId") assignmentId: string,
+    @Param("submissionId") submissionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.submissionsService.revealSubmissionIdentity(assignmentId, submissionId, user);
   }
 
   @Roles("professor")
@@ -203,5 +245,6 @@ function validateRequiredFields(fields: Record<string, string>, requiredFieldNam
     assignmentId: string;
     purpose: string;
     assignmentKey: string;
+    encryptedIdentity: string;
   };
 }

@@ -2,13 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   createComparisonRun,
   downloadAllAssignmentSubmissions,
   downloadAssignmentSubmission,
   downloadAssignmentTemplate,
   getAssignment,
+  revealAssignmentSubmissionIdentity,
   getAssignmentSubmissionDetail,
   getAssignmentTemplateDetail,
   getUploadBatch,
@@ -33,6 +34,12 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     "current-current" | "current-historical"
   >("current-current");
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
+  const [revealedIdentity, setRevealedIdentity] = useState<{
+    studentName: string;
+    studentNumber: string;
+    studentEmail: string | null;
+    assignmentKey: string;
+  } | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -122,6 +129,13 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     },
   });
 
+  const revealIdentityMutation = useMutation({
+    mutationFn: (submissionId: string) => revealAssignmentSubmissionIdentity(assignmentId, submissionId),
+    onSuccess: (identity) => {
+      setRevealedIdentity(identity);
+    },
+  });
+
   const latestVisibleRun = useMemo(
     () =>
       assignmentQuery.data?.comparisonRuns.find(
@@ -130,6 +144,11 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     [assignmentQuery.data],
   );
   const latestRun = assignmentQuery.data?.comparisonRuns[0] ?? null;
+
+  useEffect(() => {
+    setRevealedIdentity(null);
+    revealIdentityMutation.reset();
+  }, [selectedArtifact?.id, selectedArtifact?.type]);
 
   const handleHistoricalSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -641,6 +660,37 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                       <span className="meta-dot" />
                       <span>{formatDateTime(artifactDetailQuery.data.createdAt)}</span>
                     </div>
+                    {artifactDetailQuery.data.kind !== "template" && artifactDetailQuery.data.hasEncryptedIdentity ? (
+                      <div className="stack-sm">
+                        <div className="toolbar-row">
+                          <button
+                            className="secondary-button"
+                            disabled={revealIdentityMutation.isPending}
+                            onClick={() => revealIdentityMutation.mutate(artifactDetailQuery.data!.id)}
+                            type="button"
+                          >
+                            {revealIdentityMutation.isPending ? "Revealing..." : "Reveal identity"}
+                          </button>
+                        </div>
+                        {revealIdentityMutation.error ? (
+                          <p className="error-text">{revealIdentityMutation.error.message}</p>
+                        ) : null}
+                        {revealedIdentity ? (
+                          <div className="surface-muted stack-sm">
+                            <strong>Revealed identity</strong>
+                            <p>Name: {revealedIdentity.studentName}</p>
+                            <p>Student number: {revealedIdentity.studentNumber}</p>
+                            <p>Email: {revealedIdentity.studentEmail ?? "Not provided"}</p>
+                            <p>Assignment keyID: {revealedIdentity.assignmentKey}</p>
+                          </div>
+                        ) : (
+                          <p className="muted-text">
+                            This submission stores an encrypted identity that can be revealed only in
+                            the professor workflow.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                   <span className={`status-badge ${artifactDetailQuery.data.kind === "template" ? "is-active" : ""}`}>
                     {artifactDetailQuery.data.kind === "template"

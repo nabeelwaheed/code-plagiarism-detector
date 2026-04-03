@@ -1,9 +1,5 @@
-import { StudentSubmissionPanel } from "../../components/student-submission-panel";
+import { redirect } from "next/navigation";
 
 export default function StudentPage() {
-  return (
-    <main className="page-shell">
-      <StudentSubmissionPanel />
-    </main>
-  );
+  redirect("/");
 }

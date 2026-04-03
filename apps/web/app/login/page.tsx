@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LoginForm } from "../../components/login-form";
 
 export default function LoginPage() {
@@ -5,11 +6,17 @@ export default function LoginPage() {
     <main className="page-shell narrow-shell">
       <section className="hero-card">
         <div>
-          <p className="eyebrow">Seeded / Manual Auth</p>
-          <h1>Role-based sign in</h1>
+          <p className="eyebrow">Professor Access</p>
+          <h1>Professor sign in</h1>
           <p>
-            Sign in with a seeded account. Professor accounts go to assignment management and
-            evidence review, while student accounts open the zip submission workflow.
+            Sign in to manage assignments, upload historical and template material, and review
+            suspicious pairs. Student submission is now available from the public landing page.
+          </p>
+          <p className="muted-text">
+            Need an account?{" "}
+            <Link className="text-link" href="/signup">
+              Create a professor account
+            </Link>
           </p>
         </div>
       </section>

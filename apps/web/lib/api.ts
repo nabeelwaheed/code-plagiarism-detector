@@ -1,5 +1,7 @@
 "use client";
 
+import type { SubmissionIdentityPublicKeyResponse } from "./submission-identity";
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL
   ?? (process.env.NODE_ENV === "production" ? undefined : "http://localhost:3001");
@@ -105,7 +107,7 @@ export interface AssignmentDetail {
 export interface UploadBatchDetail {
   id: string;
   assignmentId: string;
-  uploaderId: string;
+  uploaderId: string | null;
   purpose: string;
   status: string;
   errorMessage: string | null;
@@ -121,6 +123,22 @@ export interface UploadBatchDetail {
     id: string;
     versionNumber: number;
     isActive: boolean;
+    createdAt: string;
+  }>;
+}
+
+export interface PublicUploadBatchDetail {
+  id: string;
+  assignmentId: string;
+  purpose: string;
+  status: string;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  submissions: Array<{
+    id: string;
+    displayName: string;
+    kind: string;
     createdAt: string;
   }>;
 }
@@ -177,6 +195,7 @@ export interface AssignmentArtifactDetail {
   kind: "current" | "historical" | "template";
   versionNumber?: number;
   createdAt: string;
+  hasEncryptedIdentity?: boolean;
   fileCount: number;
   concatenatedSource: string;
   sourceMap: Array<{
@@ -190,6 +209,13 @@ export interface AssignmentArtifactDetail {
     archivePath?: string;
     contents: string;
   }>;
+}
+
+export interface SubmissionIdentityRevealResponse {
+  studentName: string;
+  studentNumber: string;
+  studentEmail: string | null;
+  assignmentKey: string;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -271,6 +297,13 @@ export function login(email: string, password: string) {
   });
 }
 
+export function signupProfessor(email: string, password: string) {
+  return apiFetch<LoginResponse>("/auth/professor-signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
 export function listAssignments() {
   return apiFetch<AssignmentSummary[]>("/assignments");
 }
@@ -344,12 +377,42 @@ export async function uploadStudentArchive(input: {
   });
 }
 
+export async function uploadPublicStudentArchive(input: {
+  assignmentKey: string;
+  encryptedIdentity: string;
+  file: File;
+}) {
+  const body = new FormData();
+  body.append("assignmentKey", input.assignmentKey.trim());
+  body.append("encryptedIdentity", input.encryptedIdentity);
+  body.append("file", input.file, "submission.zip");
+
+  return apiFetch<{
+    assignmentId: string;
+    assignmentLanguage: "java" | "c" | "cpp";
+    uploadBatchId: string;
+    statusToken: string;
+  }>("/uploads/public/student/archive", {
+    method: "POST",
+    body,
+  });
+}
+
 export function getCurrentUser() {
   return apiFetch<{
     userId: string;
     email: string;
     role: "professor" | "student";
   }>("/auth/me");
+}
+
+export function getSubmissionIdentityPublicKey() {
+  return apiFetch<SubmissionIdentityPublicKeyResponse>("/uploads/public/identity-key");
+}
+
+export function getPublicUploadBatch(uploadBatchId: string, token: string) {
+  const query = new URLSearchParams({ token });
+  return apiFetch<PublicUploadBatchDetail>(`/uploads/public/${uploadBatchId}?${query.toString()}`);
 }
 
 export function logout() {
@@ -362,6 +425,12 @@ export function logout() {
 export function getAssignmentSubmissionDetail(assignmentId: string, submissionId: string) {
   return apiFetch<AssignmentArtifactDetail>(
     `/uploads/assignment/${assignmentId}/submissions/${submissionId}`,
+  );
+}
+
+export function revealAssignmentSubmissionIdentity(assignmentId: string, submissionId: string) {
+  return apiFetch<SubmissionIdentityRevealResponse>(
+    `/uploads/assignment/${assignmentId}/submissions/${submissionId}/identity`,
   );
 }
 

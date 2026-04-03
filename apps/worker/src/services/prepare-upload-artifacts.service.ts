@@ -1,4 +1,5 @@
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import {
   createObjectKey,
@@ -33,6 +34,7 @@ export async function prepareUploadArtifacts(input: {
       id: true,
       assignmentId: true,
       uploaderId: true,
+      encryptedIdentity: true,
       originalObjectKey: true,
     },
   });
@@ -72,9 +74,12 @@ export async function prepareUploadArtifacts(input: {
         assignmentLanguage: input.assignmentLanguage,
         uploadBatchId: input.uploadBatchId,
         archiveBuffer,
-        displayName: stripZipExtension(getObjectFileName(uploadBatch.originalObjectKey)),
+        displayName:
+          uploadBatch.encryptedIdentity
+          ? createSubmissionAlias(uploadBatch.encryptedIdentity)
+          : stripZipExtension(getObjectFileName(uploadBatch.originalObjectKey)),
         kind: "current",
-        ownerId: uploadBatch.uploaderId,
+        ownerId: uploadBatch.uploaderId ?? undefined,
       }),
     ],
   };
@@ -232,4 +237,9 @@ function stripZipExtension(fileName: string) {
 function slugifyArtifactName(value: string) {
   const sanitized = value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   return sanitized || "artifact";
+}
+
+function createSubmissionAlias(encryptedIdentity: string) {
+  const digest = createHash("sha256").update(encryptedIdentity).digest("hex").slice(0, 10).toUpperCase();
+  return `SUB-${digest}`;
 }

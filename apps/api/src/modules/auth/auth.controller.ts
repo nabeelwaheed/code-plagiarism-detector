@@ -4,6 +4,7 @@ import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { AuthService } from "./auth.service.js";
 import { CurrentUser, Public } from "./auth.decorators.js";
 import { LoginDto } from "./dto/login.dto.js";
+import { ProfessorSignupDto } from "./dto/professor-signup.dto.js";
 import type { AuthenticatedUser } from "./auth.types.js";
 import { SessionService } from "./session.service.js";
 
@@ -18,14 +19,24 @@ export class AuthController {
   @Post("login")
   async login(@Body() payload: LoginDto, @Res({ passthrough: true }) reply: FastifyReply) {
     const result = await this.authService.login(payload);
-    reply.setCookie(apiRuntimeConfig.session.cookieName, result.session.rawToken, {
-      httpOnly: true,
-      secure: apiRuntimeConfig.session.secure,
-      sameSite: apiRuntimeConfig.session.sameSite,
-      domain: apiRuntimeConfig.session.domain,
-      path: "/",
-      expires: result.session.expiresAt,
-    });
+    setSessionCookie(reply, result.session.rawToken, result.session.expiresAt);
+
+    return {
+      userId: result.userId,
+      email: result.email,
+      role: result.role,
+      expiresAt: result.session.expiresAt,
+    };
+  }
+
+  @Public()
+  @Post("professor-signup")
+  async professorSignup(
+    @Body() payload: ProfessorSignupDto,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.authService.signupProfessor(payload);
+    setSessionCookie(reply, result.session.rawToken, result.session.expiresAt);
 
     return {
       userId: result.userId,
@@ -64,4 +75,15 @@ export class AuthController {
       role: user.role,
     };
   }
+}
+
+function setSessionCookie(reply: FastifyReply, rawToken: string, expiresAt: Date) {
+  reply.setCookie(apiRuntimeConfig.session.cookieName, rawToken, {
+    httpOnly: true,
+    secure: apiRuntimeConfig.session.secure,
+    sameSite: apiRuntimeConfig.session.sameSite,
+    domain: apiRuntimeConfig.session.domain,
+    path: "/",
+    expires: expiresAt,
+  });
 }

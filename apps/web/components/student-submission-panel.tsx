@@ -1,36 +1,56 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
-import { getUploadBatch, uploadStudentArchive } from "../lib/api";
-import { useCurrentUserQuery, useLogoutMutation } from "./auth-hooks";
+import {
+  getPublicUploadBatch,
+  getSubmissionIdentityPublicKey,
+  uploadPublicStudentArchive,
+} from "../lib/api";
+import {
+  encryptSubmissionIdentity,
+  normalizeAssignmentKey,
+} from "../lib/submission-identity";
 
 export function StudentSubmissionPanel() {
+  const [studentName, setStudentName] = useState("");
+  const [studentNumber, setStudentNumber] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
   const [assignmentKey, setAssignmentKey] = useState(
     process.env.NODE_ENV === "production" ? "" : "demo-key-1234",
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [lastUploadBatchId, setLastUploadBatchId] = useState<string | null>(null);
-  const currentUserQuery = useCurrentUserQuery();
-  const logoutMutation = useLogoutMutation();
-  const session = currentUserQuery.data ?? null;
+  const [lastStatusToken, setLastStatusToken] = useState<string | null>(null);
 
   const uploadMutation = useMutation({
-    mutationFn: () =>
-      uploadStudentArchive({
+    mutationFn: async () => {
+      const encryptionKey = await getSubmissionIdentityPublicKey();
+      const encryptedIdentity = await encryptSubmissionIdentity({
+        studentName,
+        studentNumber,
+        studentEmail,
         assignmentKey,
+      }, encryptionKey);
+
+      return uploadPublicStudentArchive({
+        assignmentKey: normalizeAssignmentKey(assignmentKey),
+        encryptedIdentity,
         file: selectedFile!,
-      }),
+      });
+    },
     onSuccess: (result) => {
       setLastUploadBatchId(result.uploadBatchId);
+      setLastStatusToken(result.statusToken);
       setSelectedFile(null);
     },
   });
 
   const uploadStatusQuery = useQuery({
-    queryKey: ["upload-batch", lastUploadBatchId],
-    queryFn: () => getUploadBatch(lastUploadBatchId!),
-    enabled: Boolean(lastUploadBatchId),
+    queryKey: ["public-upload-batch", lastUploadBatchId, lastStatusToken],
+    queryFn: () => getPublicUploadBatch(lastUploadBatchId!, lastStatusToken!),
+    enabled: Boolean(lastUploadBatchId && lastStatusToken),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "ready" || status === "failed" ? false : 3000;
@@ -38,22 +58,20 @@ export function StudentSubmissionPanel() {
   });
 
   const uploadSummary = useMemo(() => uploadStatusQuery.data, [uploadStatusQuery.data]);
+  const isSubmitEnabled =
+    Boolean(selectedFile)
+    && Boolean(studentName.trim())
+    && Boolean(studentNumber.trim())
+    && Boolean(assignmentKey.trim());
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedFile || !session) {
+    if (!selectedFile || !studentName.trim() || !studentNumber.trim() || !assignmentKey.trim()) {
       return;
     }
+
     uploadMutation.mutate();
   };
-
-  if (!session) {
-    return <p className="panel">Sign in as a student to submit a zip archive.</p>;
-  }
-
-  if (session.role !== "student") {
-    return <p className="panel">This account is not a student account.</p>;
-  }
 
   return (
     <div className="page-stack">
@@ -62,27 +80,55 @@ export function StudentSubmissionPanel() {
           <p className="eyebrow">Student Submission</p>
           <h1>Submit one zip archive to one assignment keyID</h1>
           <p>
-            Upload one zip, enter the assignment keyID, and the worker will prepare and compare
-            your submission against the assignment pool.
+            Enter your student details, provide the assignment keyID, and upload one zip archive.
+            The app encrypts your identifying information in your browser before anything is sent
+            to the server.
           </p>
         </div>
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={() => {
-            logoutMutation.mutate(undefined, {
-              onSettled: () => {
-                window.location.href = "/login";
-              },
-            });
-          }}
-        >
-          Sign out
-        </button>
+        <div className="hero-actions">
+          <Link className="secondary-button as-link" href="/login">
+            Professor sign in
+          </Link>
+          <Link className="primary-button as-link" href="/signup">
+            Professor sign up
+          </Link>
+        </div>
       </section>
 
       <section className="panel">
         <form className="form-stack" onSubmit={handleSubmit}>
+          <label className="field">
+            <span>
+              Student name <span className="required-mark">*</span>
+            </span>
+            <input
+              value={studentName}
+              onChange={(event) => setStudentName(event.target.value)}
+              placeholder="Jane Student"
+            />
+          </label>
+          <label className="field">
+            <span>
+              Student number <span className="required-mark">*</span>
+            </span>
+            <input
+              value={studentNumber}
+              onChange={(event) => setStudentNumber(event.target.value)}
+              placeholder="1234567"
+            />
+          </label>
+          <label className="field">
+            <span>Student email</span>
+            <input
+              value={studentEmail}
+              onChange={(event) => setStudentEmail(event.target.value)}
+              placeholder="Optional"
+              type="email"
+            />
+          </label>
+          <p className="muted-text">
+            Optional email is encrypted and submitted only if you provide it.
+          </p>
           <label className="field">
             <span>
               Assignment keyID <span className="required-mark">*</span>
@@ -105,12 +151,15 @@ export function StudentSubmissionPanel() {
           </label>
           <button
             className="primary-button"
-            disabled={uploadMutation.isPending || !selectedFile || !assignmentKey.trim()}
+            disabled={uploadMutation.isPending || !isSubmitEnabled}
             type="submit"
           >
             {uploadMutation.isPending ? "Uploading..." : "Submit zip"}
           </button>
           {uploadMutation.error ? <p className="error-text">{uploadMutation.error.message}</p> : null}
+          {uploadStatusQuery.error ? (
+            <p className="error-text">{uploadStatusQuery.error.message}</p>
+          ) : null}
         </form>
       </section>
 
@@ -118,7 +167,9 @@ export function StudentSubmissionPanel() {
         <section className="panel">
           <p className="eyebrow">Latest Upload</p>
           <h2>Preparation status</h2>
-          <p>Status: <strong>{uploadSummary.status}</strong></p>
+          <p>
+            Status: <strong>{uploadSummary.status}</strong>
+          </p>
           {uploadSummary.errorMessage ? (
             <p className="error-text">{uploadSummary.errorMessage}</p>
           ) : null}

@@ -6,16 +6,23 @@ import {
 } from "@nestjs/common";
 import { UploadPurpose } from "@prisma/client";
 import { zipSync } from "fflate";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   createObjectKey,
   readObjectBuffer,
   writeObjectBuffer,
 } from "@similarity/shared";
+import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 import { CreateUploadBatchDto } from "./dto/create-upload-batch.dto.js";
 import { CreateStudentSubmissionDto } from "./dto/create-student-submission.dto.js";
+import {
+  decryptSubmissionIdentity,
+  getSubmissionIdentityPublicKey,
+  validateEncryptedIdentityString,
+} from "./submission-identity.crypto.js";
 
 @Injectable()
 export class SubmissionsService {
@@ -53,6 +60,10 @@ export class SubmissionsService {
     });
 
     return uploadBatch;
+  }
+
+  getPublicSubmissionIdentityKey() {
+    return getSubmissionIdentityPublicKey();
   }
 
   async createProfessorArchiveUpload(payload: {
@@ -103,24 +114,7 @@ export class SubmissionsService {
   }
 
   async createStudentSubmission(payload: CreateStudentSubmissionDto, user: AuthenticatedUser) {
-    const assignmentKey = await this.prisma.assignmentKey.findFirst({
-      where: {
-        publicKey: payload.assignmentKey,
-        isActive: true,
-      },
-      include: {
-        assignment: {
-          select: {
-            id: true,
-            language: true,
-          },
-        },
-      },
-    });
-
-    if (!assignmentKey) {
-      throw new BadRequestException("That assignment key is invalid or inactive");
-    }
+    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
 
     const uploadBatch = await this.prisma.uploadBatch.create({
       data: {
@@ -152,25 +146,7 @@ export class SubmissionsService {
     user: AuthenticatedUser;
   }) {
     ensureZipFileName(payload.fileName);
-
-    const assignmentKey = await this.prisma.assignmentKey.findFirst({
-      where: {
-        publicKey: payload.assignmentKey,
-        isActive: true,
-      },
-      include: {
-        assignment: {
-          select: {
-            id: true,
-            language: true,
-          },
-        },
-      },
-    });
-
-    if (!assignmentKey) {
-      throw new BadRequestException("That assignment key is invalid or inactive");
-    }
+    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
 
     const objectKey = createObjectKey(
       `raw/${assignmentKey.assignment.id}/student_submission`,
@@ -199,6 +175,48 @@ export class SubmissionsService {
       assignmentId: assignmentKey.assignment.id,
       assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
       uploadBatchId: uploadBatch.id,
+    };
+  }
+
+  async createPublicStudentSubmissionFromArchive(payload: {
+    assignmentKey: string;
+    encryptedIdentity: string;
+    fileName: string;
+    archiveBuffer: Buffer;
+  }) {
+    ensureZipFileName(payload.fileName);
+    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
+    const encryptedIdentity = validateEncryptedIdentityString(payload.encryptedIdentity);
+
+    const objectKey = createObjectKey(
+      `raw/${assignmentKey.assignment.id}/student_submission`,
+      "submission.zip",
+    );
+
+    await writeObjectBuffer(objectKey, payload.archiveBuffer);
+
+    const uploadBatch = await this.prisma.uploadBatch.create({
+      data: {
+        assignmentId: assignmentKey.assignment.id,
+        uploaderId: null,
+        encryptedIdentity,
+        purpose: UploadPurpose.STUDENT_SUBMISSION,
+        originalObjectKey: objectKey,
+      },
+    });
+
+    await this.queueService.enqueueUploadPreparation({
+      assignmentId: assignmentKey.assignment.id,
+      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+      uploadBatchId: uploadBatch.id,
+      kind: "current",
+    });
+
+    return {
+      assignmentId: assignmentKey.assignment.id,
+      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+      uploadBatchId: uploadBatch.id,
+      statusToken: this.createPublicStatusToken(uploadBatch.id),
     };
   }
 
@@ -268,6 +286,47 @@ export class SubmissionsService {
     };
   }
 
+  async getPublicUploadBatch(uploadBatchId: string, token: string | undefined) {
+    if (!token || !this.isValidPublicStatusToken(uploadBatchId, token)) {
+      throw new ForbiddenException("You do not have access to this upload batch");
+    }
+
+    const uploadBatch = await this.prisma.uploadBatch.findUnique({
+      where: { id: uploadBatchId },
+      include: {
+        submissions: {
+          select: {
+            id: true,
+            displayName: true,
+            kind: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!uploadBatch || !uploadBatch.encryptedIdentity) {
+      return null;
+    }
+
+    return {
+      id: uploadBatch.id,
+      assignmentId: uploadBatch.assignmentId,
+      purpose: uploadBatch.purpose.toLowerCase(),
+      status: uploadBatch.status.toLowerCase(),
+      errorMessage: uploadBatch.errorMessage,
+      createdAt: uploadBatch.createdAt,
+      updatedAt: uploadBatch.updatedAt,
+      submissions: uploadBatch.submissions.map((submission) => ({
+        id: submission.id,
+        displayName: submission.displayName,
+        kind: submission.kind.toLowerCase(),
+        createdAt: submission.createdAt,
+      })),
+    };
+  }
+
   async getSubmissionDetail(
     assignmentId: string,
     submissionId: string,
@@ -281,6 +340,11 @@ export class SubmissionsService {
         assignmentId,
       },
       include: {
+        uploadBatch: {
+          select: {
+            encryptedIdentity: true,
+          },
+        },
         files: {
           orderBy: { canonicalOrder: "asc" },
         },
@@ -296,6 +360,7 @@ export class SubmissionsService {
       displayName: submission.displayName,
       kind: submission.kind.toLowerCase(),
       createdAt: submission.createdAt,
+      hasEncryptedIdentity: Boolean(submission.uploadBatch.encryptedIdentity),
       fileCount: submission.files.length,
       concatenatedSource: submission.concatenatedSource,
       sourceMap: submission.sourceMapJson,
@@ -307,6 +372,58 @@ export class SubmissionsService {
           contents: (await readObjectBuffer(file.storageObjectKey)).toString("utf8"),
         })),
       ),
+    };
+  }
+
+  async revealSubmissionIdentity(
+    assignmentId: string,
+    submissionId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+
+    const submission = await this.prisma.submission.findFirst({
+      where: {
+        id: submissionId,
+        assignmentId,
+      },
+      include: {
+        uploadBatch: {
+          select: {
+            encryptedIdentity: true,
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException("That submission no longer exists");
+    }
+
+    if (!submission.uploadBatch.encryptedIdentity) {
+      throw new NotFoundException("That submission does not have an encrypted identity to reveal");
+    }
+
+    const identity = decryptSubmissionIdentity(submission.uploadBatch.encryptedIdentity);
+    const assignmentKey = await this.prisma.assignmentKey.findFirst({
+      where: {
+        assignmentId,
+        publicKey: identity.assignmentKey,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!assignmentKey) {
+      throw new BadRequestException("This submission identity could not be verified for this assignment");
+    }
+
+    return {
+      studentName: identity.studentName,
+      studentNumber: identity.studentNumber,
+      studentEmail: identity.studentEmail ?? null,
+      assignmentKey: identity.assignmentKey,
     };
   }
 
@@ -477,6 +594,53 @@ export class SubmissionsService {
       throw new ForbiddenException("You do not have access to this assignment");
     }
   }
+
+  private async findActiveAssignmentKey(rawAssignmentKey: string) {
+    const publicKey = normalizeAssignmentKey(rawAssignmentKey);
+
+    if (!publicKey) {
+      throw new BadRequestException("That assignment key is invalid or inactive");
+    }
+
+    const assignmentKey = await this.prisma.assignmentKey.findFirst({
+      where: {
+        publicKey,
+        isActive: true,
+      },
+      include: {
+        assignment: {
+          select: {
+            id: true,
+            language: true,
+          },
+        },
+      },
+    });
+
+    if (!assignmentKey) {
+      throw new BadRequestException("That assignment key is invalid or inactive");
+    }
+
+    return assignmentKey;
+  }
+
+  private createPublicStatusToken(uploadBatchId: string) {
+    return createHmac("sha256", apiRuntimeConfig.publicUploads.statusTokenSecret)
+      .update(uploadBatchId)
+      .digest("base64url");
+  }
+
+  private isValidPublicStatusToken(uploadBatchId: string, token: string) {
+    const expected = this.createPublicStatusToken(uploadBatchId);
+    const providedBuffer = Buffer.from(token);
+    const expectedBuffer = Buffer.from(expected);
+
+    if (providedBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+
+    return timingSafeEqual(providedBuffer, expectedBuffer);
+  }
 }
 
 function mapUploadPurposeToPreparationKind(purpose: CreateUploadBatchDto["purpose"]) {
@@ -494,6 +658,10 @@ function ensureZipFileName(fileName: string) {
   if (!fileName.toLowerCase().endsWith(".zip")) {
     throw new BadRequestException("uploaded archive must be a zip file");
   }
+}
+
+function normalizeAssignmentKey(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function ensureSupportedUploadPurpose(purpose: string): asserts purpose is CreateUploadBatchDto["purpose"] {

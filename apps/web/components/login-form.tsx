@@ -21,13 +21,13 @@ export function LoginForm() {
       return;
     }
 
-    router.replace(currentUserQuery.data.role === "professor" ? "/professor" : "/student");
+    router.replace(currentUserQuery.data.role === "professor" ? "/professor" : "/");
   }, [currentUserQuery.data, router]);
 
   const loginMutation = useMutation({
     mutationFn: () => login(email, password),
     onSuccess: (session) => {
-      router.push(session.role === "professor" ? "/professor" : "/student");
+      router.push(session.role === "professor" ? "/professor" : "/");
     },
   });
 

@@ -1,3 +1,5 @@
+import { generateKeyPairSync } from "node:crypto";
+
 const DEFAULT_DEV_CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"];
 
 export interface ApiRuntimeConfig {
@@ -16,6 +18,14 @@ export interface ApiRuntimeConfig {
     domain?: string;
     ttlMs: number;
   };
+  publicUploads: {
+    statusTokenSecret: string;
+  };
+  submissionIdentity: {
+    keyId: string;
+    publicKeyPem: string;
+    privateKeyPem: string;
+  };
   engine: {
     version: string;
     gstMinMatchLength: number;
@@ -32,6 +42,7 @@ function loadApiRuntimeConfig(): ApiRuntimeConfig {
   const databaseUrl = getRequiredEnv("DATABASE_URL");
   const redisUrl = getEnvValue("REDIS_URL", isProduction ? undefined : "redis://localhost:6379");
   const corsAllowedOrigins = getCorsAllowedOrigins(isProduction);
+  const devIdentityKeyPair = !isProduction ? createDevSubmissionIdentityKeyPair() : null;
 
   return {
     nodeEnv,
@@ -48,6 +59,26 @@ function loadApiRuntimeConfig(): ApiRuntimeConfig {
       sameSite: getSameSiteEnv("AUTH_COOKIE_SAME_SITE", isProduction ? "lax" : "lax"),
       domain: process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined,
       ttlMs: getIntegerEnv("AUTH_SESSION_TTL_HOURS", 24 * 7) * 60 * 60 * 1000,
+    },
+    publicUploads: {
+      statusTokenSecret: getEnvValue(
+        "PUBLIC_UPLOAD_STATUS_TOKEN_SECRET",
+        isProduction ? undefined : "dev-public-upload-status-secret",
+      ),
+    },
+    submissionIdentity: {
+      keyId: getEnvValue(
+        "SUBMISSION_IDENTITY_KEY_ID",
+        isProduction ? undefined : "dev-submission-identity-key",
+      ),
+      publicKeyPem: getPemEnvValue(
+        "SUBMISSION_IDENTITY_PUBLIC_KEY_PEM_BASE64",
+        devIdentityKeyPair?.publicKeyPem,
+      ),
+      privateKeyPem: getPemEnvValue(
+        "SUBMISSION_IDENTITY_PRIVATE_KEY_PEM_BASE64",
+        devIdentityKeyPair?.privateKeyPem,
+      ),
     },
     engine: {
       version: getEnvValue("ENGINE_VERSION", "0.1.0"),
@@ -82,6 +113,19 @@ function getEnvValue(name: string, defaultValue?: string) {
   const value = process.env[name]?.trim();
   if (value) {
     return value;
+  }
+
+  if (defaultValue !== undefined) {
+    return defaultValue;
+  }
+
+  throw new Error(`${name} is required`);
+}
+
+function getPemEnvValue(name: string, defaultValue?: string) {
+  const value = process.env[name]?.trim();
+  if (value) {
+    return decodePemEnvValue(name, value);
   }
 
   if (defaultValue !== undefined) {
@@ -136,4 +180,39 @@ function getSameSiteEnv(
   }
 
   throw new Error(`${name} must be one of: lax, strict, none`);
+}
+
+function decodePemEnvValue(name: string, value: string) {
+  if (value.startsWith("-----BEGIN")) {
+    return value;
+  }
+
+  try {
+    const decodedValue = Buffer.from(value, "base64").toString("utf8").trim();
+    if (!decodedValue.startsWith("-----BEGIN")) {
+      throw new Error("decoded value is not PEM");
+    }
+    return decodedValue;
+  } catch {
+    throw new Error(`${name} must be a PEM string or base64-encoded PEM`);
+  }
+}
+
+function createDevSubmissionIdentityKeyPair() {
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 4096,
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem",
+    },
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem",
+    },
+  });
+
+  return {
+    publicKeyPem: publicKey,
+    privateKeyPem: privateKey,
+  };
 }
