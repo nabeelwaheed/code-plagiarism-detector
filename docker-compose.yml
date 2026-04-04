@@ -42,8 +42,6 @@ services:
     depends_on:
       - postgres
       - redis
-    ports:
-      - "3001:3001"
     volumes:
       - object-storage:/app/var/object-storage
 
@@ -83,10 +81,24 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     depends_on:
       - api
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+      - api
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
 
 volumes:
   postgres-data:
   redis-data:
   object-storage:
+  caddy-data:
+  caddy-config:
