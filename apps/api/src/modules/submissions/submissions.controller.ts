@@ -103,12 +103,10 @@ export class SubmissionsController {
   async createPublicBulkStudentSubmissionArchive(@Req() request: FastifyRequest) {
     const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
       "assignmentKey",
-      "bulkAccessCode",
     ]);
 
     return this.submissionsService.createPublicBulkStudentSubmissionArchive({
       assignmentKey: fields.assignmentKey,
-      bulkAccessCode: fields.bulkAccessCode,
       fileName,
       archiveBuffer,
     });
@@ -262,6 +260,5 @@ function validateRequiredFields(fields: Record<string, string>, requiredFieldNam
     purpose: string;
     assignmentKey: string;
     encryptedIdentity: string;
-    bulkAccessCode: string;
   };
 }

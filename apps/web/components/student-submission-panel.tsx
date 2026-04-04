@@ -25,9 +25,6 @@ export function StudentSubmissionPanel() {
   const [bulkAssignmentKey, setBulkAssignmentKey] = useState(
     process.env.NODE_ENV === "production" ? "" : "demo-key-1234",
   );
-  const [bulkAccessCode, setBulkAccessCode] = useState(
-    process.env.NODE_ENV === "production" ? "" : "demo-bulk-upload-code",
-  );
   const [selectedBulkFile, setSelectedBulkFile] = useState<File | null>(null);
   const [lastUploadBatchId, setLastUploadBatchId] = useState<string | null>(null);
   const [lastStatusToken, setLastStatusToken] = useState<string | null>(null);
@@ -59,7 +56,6 @@ export function StudentSubmissionPanel() {
     mutationFn: () =>
       uploadPublicBulkStudentArchive({
         assignmentKey: normalizeAssignmentKey(bulkAssignmentKey),
-        bulkAccessCode,
         file: selectedBulkFile!,
       }),
     onSuccess: (result) => {
@@ -87,8 +83,7 @@ export function StudentSubmissionPanel() {
     && Boolean(assignmentKey.trim());
   const isBulkSubmitEnabled =
     Boolean(selectedBulkFile)
-    && Boolean(bulkAssignmentKey.trim())
-    && Boolean(bulkAccessCode.trim());
+    && Boolean(bulkAssignmentKey.trim());
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -101,7 +96,7 @@ export function StudentSubmissionPanel() {
 
   const handleBulkSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedBulkFile || !bulkAssignmentKey.trim() || !bulkAccessCode.trim()) {
+    if (!selectedBulkFile || !bulkAssignmentKey.trim()) {
       return;
     }
 
@@ -234,17 +229,6 @@ export function StudentSubmissionPanel() {
               value={bulkAssignmentKey}
               onChange={(event) => setBulkAssignmentKey(event.target.value)}
               placeholder="Enter your assignment key"
-            />
-          </label>
-          <label className="field">
-            <span>
-              Bulk access code <span className="required-mark">*</span>
-            </span>
-            <input
-              value={bulkAccessCode}
-              onChange={(event) => setBulkAccessCode(event.target.value)}
-              placeholder="Enter the TA bulk upload code"
-              type="password"
             />
           </label>
           <label className="field">

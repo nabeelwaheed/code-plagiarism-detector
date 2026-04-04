@@ -401,12 +401,10 @@ export async function uploadPublicStudentArchive(input: {
 
 export async function uploadPublicBulkStudentArchive(input: {
   assignmentKey: string;
-  bulkAccessCode: string;
   file: File;
 }) {
   const body = new FormData();
   body.append("assignmentKey", input.assignmentKey.trim());
-  body.append("bulkAccessCode", input.bulkAccessCode);
   body.append("file", input.file, "bulk-current-submissions.zip");
 
   return apiFetch<{

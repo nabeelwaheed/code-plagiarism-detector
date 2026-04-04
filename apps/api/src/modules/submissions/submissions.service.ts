@@ -222,12 +222,10 @@ export class SubmissionsService {
 
   async createPublicBulkStudentSubmissionArchive(payload: {
     assignmentKey: string;
-    bulkAccessCode: string;
     fileName: string;
     archiveBuffer: Buffer;
   }) {
     ensureZipFileName(payload.fileName);
-    this.assertValidBulkAccessCode(payload.bulkAccessCode);
     const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
 
     const objectKey = createObjectKey(
@@ -702,21 +700,6 @@ export class SubmissionsService {
     }
 
     return timingSafeEqual(providedBuffer, expectedBuffer);
-  }
-
-  private assertValidBulkAccessCode(providedCode: string) {
-    const normalizedProvidedCode = providedCode.trim();
-    const expectedCode = apiRuntimeConfig.publicUploads.bulkAccessCode;
-
-    const providedBuffer = Buffer.from(normalizedProvidedCode);
-    const expectedBuffer = Buffer.from(expectedCode);
-
-    if (
-      providedBuffer.length !== expectedBuffer.length
-      || !timingSafeEqual(providedBuffer, expectedBuffer)
-    ) {
-      throw new BadRequestException("That bulk upload access code is invalid");
-    }
   }
 }
 
