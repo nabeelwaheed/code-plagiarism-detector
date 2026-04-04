@@ -22,6 +22,22 @@ export function getUserFacingUploadFailureMessage(error: unknown) {
     return "That archive contains invalid file paths and could not be processed.";
   }
 
+  if (normalizedMessage === "bulk current archive must contain first-layer child zip files") {
+    return "That bulk archive must contain direct child zip files, with one child zip per submission.";
+  }
+
+  if (normalizedMessage === "bulk current archive may only contain first-layer child zip files") {
+    return "That bulk archive can only contain direct child zip files at the top level.";
+  }
+
+  if (normalizedMessage === "bulk current archive contains duplicate submission names after sanitization") {
+    return "Two or more child zip files resolve to the same submission name. Please rename them and try again.";
+  }
+
+  if (normalizedMessage === "bulk current archive contains a child zip with an invalid name") {
+    return "One or more child zip filenames become invalid after sanitization. Please rename those child zip files and try again.";
+  }
+
   if (
     normalizedMessage.startsWith("no relevant ")
     && normalizedMessage.endsWith(" source files found in uploaded archive")

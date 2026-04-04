@@ -99,6 +99,22 @@ export class SubmissionsController {
   }
 
   @Public()
+  @Post("public/student/bulk-archive")
+  async createPublicBulkStudentSubmissionArchive(@Req() request: FastifyRequest) {
+    const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
+      "assignmentKey",
+      "bulkAccessCode",
+    ]);
+
+    return this.submissionsService.createPublicBulkStudentSubmissionArchive({
+      assignmentKey: fields.assignmentKey,
+      bulkAccessCode: fields.bulkAccessCode,
+      fileName,
+      archiveBuffer,
+    });
+  }
+
+  @Public()
   @Get("public/:uploadBatchId")
   getPublicUploadBatch(
     @Param("uploadBatchId") uploadBatchId: string,
@@ -246,5 +262,6 @@ function validateRequiredFields(fields: Record<string, string>, requiredFieldNam
     purpose: string;
     assignmentKey: string;
     encryptedIdentity: string;
+    bulkAccessCode: string;
   };
 }

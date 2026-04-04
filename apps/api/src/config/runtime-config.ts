@@ -20,6 +20,7 @@ export interface ApiRuntimeConfig {
   };
   publicUploads: {
     statusTokenSecret: string;
+    bulkAccessCode: string;
   };
   submissionIdentity: {
     keyId: string;
@@ -64,6 +65,10 @@ function loadApiRuntimeConfig(): ApiRuntimeConfig {
       statusTokenSecret: getEnvValue(
         "PUBLIC_UPLOAD_STATUS_TOKEN_SECRET",
         isProduction ? undefined : "dev-public-upload-status-secret",
+      ),
+      bulkAccessCode: getEnvValue(
+        "PUBLIC_BULK_UPLOAD_ACCESS_CODE",
+        isProduction ? undefined : "demo-bulk-upload-code",
       ),
     },
     submissionIdentity: {

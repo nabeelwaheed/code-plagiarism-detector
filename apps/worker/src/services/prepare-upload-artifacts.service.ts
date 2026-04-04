@@ -26,7 +26,7 @@ export async function prepareUploadArtifacts(input: {
   assignmentId: string;
   assignmentLanguage: AssignmentLanguage;
   uploadBatchId: string;
-  kind: "current" | "historical" | "template";
+  kind: "current" | "historical" | "template" | "bulk_current";
 }) {
   const uploadBatch = await prisma.uploadBatch.findUniqueOrThrow({
     where: { id: input.uploadBatchId },
@@ -59,6 +59,17 @@ export async function prepareUploadArtifacts(input: {
   if (input.kind === "historical") {
     return {
       submissions: await prepareHistoricalSubmissionArtifacts({
+        assignmentId: input.assignmentId,
+        assignmentLanguage: input.assignmentLanguage,
+        uploadBatchId: input.uploadBatchId,
+        archiveBuffer,
+      }),
+    };
+  }
+
+  if (input.kind === "bulk_current") {
+    return {
+      submissions: await prepareBulkCurrentSubmissionArtifacts({
         assignmentId: input.assignmentId,
         assignmentLanguage: input.assignmentLanguage,
         uploadBatchId: input.uploadBatchId,
@@ -109,6 +120,41 @@ async function prepareHistoricalSubmissionArtifacts(input: {
         displayName: stripZipExtension(path.posix.basename(boundary.childZipPath)),
         kind: "historical",
         boundaryArchivePath: boundary.childZipPath,
+      }),
+    );
+  }
+
+  return submissions;
+}
+
+async function prepareBulkCurrentSubmissionArtifacts(input: {
+  assignmentId: string;
+  assignmentLanguage: AssignmentLanguage;
+  uploadBatchId: string;
+  archiveBuffer: Buffer;
+}) {
+  const childZipPaths = listBulkCurrentChildZipPaths(input.archiveBuffer);
+  const sanitizedNames = new Set<string>();
+  const submissions: PreparedSubmissionPersistenceInput[] = [];
+
+  for (const childZipPath of childZipPaths) {
+    const displayName = sanitizeBulkSubmissionDisplayName(childZipPath);
+
+    if (sanitizedNames.has(displayName)) {
+      throw new Error("bulk current archive contains duplicate submission names after sanitization");
+    }
+
+    sanitizedNames.add(displayName);
+
+    const childArchiveBuffer = readArchiveEntryBuffer(input.archiveBuffer, childZipPath);
+    submissions.push(
+      await prepareSingleSubmissionArtifacts({
+        assignmentId: input.assignmentId,
+        assignmentLanguage: input.assignmentLanguage,
+        uploadBatchId: input.uploadBatchId,
+        archiveBuffer: childArchiveBuffer,
+        displayName,
+        kind: "current",
       }),
     );
   }
@@ -242,4 +288,63 @@ function slugifyArtifactName(value: string) {
 function createSubmissionAlias(encryptedIdentity: string) {
   const digest = createHash("sha256").update(encryptedIdentity).digest("hex").slice(0, 10).toUpperCase();
   return `SUB-${digest}`;
+}
+
+function listBulkCurrentChildZipPaths(archiveBuffer: Buffer) {
+  const firstLayerFiles = listArchiveEntries(archiveBuffer)
+    .filter((entry) => !entry.isDirectory)
+    .filter((entry) => entry.relativePath.split("/").length === 1);
+
+  const meaningfulFirstLayerFiles = firstLayerFiles.filter(
+    (entry) => !isIgnoredBulkRootEntry(entry.relativePath),
+  );
+  const childZipPaths = meaningfulFirstLayerFiles
+    .filter((entry) => entry.relativePath.toLowerCase().endsWith(".zip"))
+    .map((entry) => entry.relativePath)
+    .sort((left, right) => left.localeCompare(right));
+  const invalidFirstLayerFiles = meaningfulFirstLayerFiles.filter(
+    (entry) => !entry.relativePath.toLowerCase().endsWith(".zip"),
+  );
+
+  if (childZipPaths.length === 0) {
+    throw new Error("bulk current archive must contain first-layer child zip files");
+  }
+
+  if (invalidFirstLayerFiles.length > 0) {
+    throw new Error("bulk current archive may only contain first-layer child zip files");
+  }
+
+  return childZipPaths;
+}
+
+function isIgnoredBulkRootEntry(relativePath: string) {
+  const baseName = path.posix.basename(relativePath);
+  return (
+    relativePath.startsWith("__MACOSX/")
+    || baseName === ".DS_Store"
+    || baseName === "Thumbs.db"
+    || baseName.startsWith("._")
+  );
+}
+
+function sanitizeBulkSubmissionDisplayName(childZipPath: string) {
+  const baseName = path.posix.basename(childZipPath);
+  const stem = stripZipExtension(baseName)
+    .normalize("NFKC")
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sanitized = stem
+    .replace(/[\\/]/g, "-")
+    .replace(/[^a-zA-Z0-9._ -]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[ ._-]+|[ ._-]+$/g, "");
+
+  if (!sanitized) {
+    throw new Error("bulk current archive contains a child zip with an invalid name");
+  }
+
+  return sanitized;
 }

@@ -20,7 +20,7 @@ export interface UploadPreparationJob {
   assignmentId: string;
   assignmentLanguage: AssignmentLanguage;
   uploadBatchId: string;
-  kind: SubmissionKind | "template";
+  kind: SubmissionKind | "template" | "bulk_current";
   preparedSubmissions?: PreparedSubmissionPersistenceInput[];
   preparedTemplate?: PreparedTemplatePersistenceInput;
 }

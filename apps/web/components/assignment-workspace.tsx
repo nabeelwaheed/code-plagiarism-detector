@@ -36,9 +36,9 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
   const [revealedIdentity, setRevealedIdentity] = useState<{
     studentName: string;
-    studentNumber: string;
+    studentNumber: string | null;
     studentEmail: string | null;
-    assignmentKey: string;
+    assignmentKey: string | null;
   } | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
@@ -660,7 +660,8 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                       <span className="meta-dot" />
                       <span>{formatDateTime(artifactDetailQuery.data.createdAt)}</span>
                     </div>
-                    {artifactDetailQuery.data.kind !== "template" && artifactDetailQuery.data.hasEncryptedIdentity ? (
+                    {artifactDetailQuery.data.kind !== "template"
+                    && artifactDetailQuery.data.identityRevealMode ? (
                       <div className="stack-sm">
                         <div className="toolbar-row">
                           <button
@@ -679,14 +680,17 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                           <div className="surface-muted stack-sm">
                             <strong>Revealed identity</strong>
                             <p>Name: {revealedIdentity.studentName}</p>
-                            <p>Student number: {revealedIdentity.studentNumber}</p>
+                            <p>Student number: {revealedIdentity.studentNumber ?? "Not provided"}</p>
                             <p>Email: {revealedIdentity.studentEmail ?? "Not provided"}</p>
-                            <p>Assignment keyID: {revealedIdentity.assignmentKey}</p>
+                            {revealedIdentity.assignmentKey ? (
+                              <p>Assignment keyID: {revealedIdentity.assignmentKey}</p>
+                            ) : null}
                           </div>
                         ) : (
                           <p className="muted-text">
-                            This submission stores an encrypted identity that can be revealed only in
-                            the professor workflow.
+                            {artifactDetailQuery.data.identityRevealMode === "encrypted"
+                              ? "This submission stores an encrypted identity that can be revealed only in the professor workflow."
+                              : "This bulk testing submission reveals the sanitized child zip filename stem as the student name."}
                           </p>
                         )}
                       </div>

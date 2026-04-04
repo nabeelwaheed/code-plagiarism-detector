@@ -220,6 +220,48 @@ export class SubmissionsService {
     };
   }
 
+  async createPublicBulkStudentSubmissionArchive(payload: {
+    assignmentKey: string;
+    bulkAccessCode: string;
+    fileName: string;
+    archiveBuffer: Buffer;
+  }) {
+    ensureZipFileName(payload.fileName);
+    this.assertValidBulkAccessCode(payload.bulkAccessCode);
+    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
+
+    const objectKey = createObjectKey(
+      `raw/${assignmentKey.assignment.id}/bulk_student_submission`,
+      "bulk-current-submissions.zip",
+    );
+
+    await writeObjectBuffer(objectKey, payload.archiveBuffer);
+
+    const uploadBatch = await this.prisma.uploadBatch.create({
+      data: {
+        assignmentId: assignmentKey.assignment.id,
+        uploaderId: null,
+        encryptedIdentity: null,
+        purpose: UploadPurpose.STUDENT_SUBMISSION,
+        originalObjectKey: objectKey,
+      },
+    });
+
+    await this.queueService.enqueueUploadPreparation({
+      assignmentId: assignmentKey.assignment.id,
+      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+      uploadBatchId: uploadBatch.id,
+      kind: "bulk_current",
+    });
+
+    return {
+      assignmentId: assignmentKey.assignment.id,
+      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+      uploadBatchId: uploadBatch.id,
+      statusToken: this.createPublicStatusToken(uploadBatch.id),
+    };
+  }
+
   async getUploadBatch(uploadBatchId: string, user: AuthenticatedUser) {
     const uploadBatch = await this.prisma.uploadBatch.findUnique({
       where: { id: uploadBatchId },
@@ -306,8 +348,12 @@ export class SubmissionsService {
       },
     });
 
-    if (!uploadBatch || !uploadBatch.encryptedIdentity) {
+    if (!uploadBatch) {
       return null;
+    }
+
+    if (!isPublicAnonymousStudentUploadBatch(uploadBatch)) {
+      throw new ForbiddenException("You do not have access to this upload batch");
     }
 
     return {
@@ -343,6 +389,8 @@ export class SubmissionsService {
         uploadBatch: {
           select: {
             encryptedIdentity: true,
+            purpose: true,
+            uploaderId: true,
           },
         },
         files: {
@@ -361,6 +409,7 @@ export class SubmissionsService {
       kind: submission.kind.toLowerCase(),
       createdAt: submission.createdAt,
       hasEncryptedIdentity: Boolean(submission.uploadBatch.encryptedIdentity),
+      identityRevealMode: getSubmissionIdentityRevealMode(submission.uploadBatch),
       fileCount: submission.files.length,
       concatenatedSource: submission.concatenatedSource,
       sourceMap: submission.sourceMapJson,
@@ -391,6 +440,8 @@ export class SubmissionsService {
         uploadBatch: {
           select: {
             encryptedIdentity: true,
+            purpose: true,
+            uploaderId: true,
           },
         },
       },
@@ -400,31 +451,42 @@ export class SubmissionsService {
       throw new NotFoundException("That submission no longer exists");
     }
 
+    if (submission.uploadBatch.encryptedIdentity) {
+      const identity = decryptSubmissionIdentity(submission.uploadBatch.encryptedIdentity);
+      const assignmentKey = await this.prisma.assignmentKey.findFirst({
+        where: {
+          assignmentId,
+          publicKey: identity.assignmentKey,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!assignmentKey) {
+        throw new BadRequestException("This submission identity could not be verified for this assignment");
+      }
+
+      return {
+        studentName: identity.studentName,
+        studentNumber: identity.studentNumber,
+        studentEmail: identity.studentEmail ?? null,
+        assignmentKey: identity.assignmentKey,
+      };
+    }
+
+    if (isBulkPublicUploadBatch(submission.uploadBatch)) {
+      return {
+        studentName: submission.displayName,
+        studentNumber: null,
+        studentEmail: null,
+        assignmentKey: null,
+      };
+    }
+
     if (!submission.uploadBatch.encryptedIdentity) {
-      throw new NotFoundException("That submission does not have an encrypted identity to reveal");
+      throw new NotFoundException("That submission does not have a revealable identity");
     }
-
-    const identity = decryptSubmissionIdentity(submission.uploadBatch.encryptedIdentity);
-    const assignmentKey = await this.prisma.assignmentKey.findFirst({
-      where: {
-        assignmentId,
-        publicKey: identity.assignmentKey,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!assignmentKey) {
-      throw new BadRequestException("This submission identity could not be verified for this assignment");
-    }
-
-    return {
-      studentName: identity.studentName,
-      studentNumber: identity.studentNumber,
-      studentEmail: identity.studentEmail ?? null,
-      assignmentKey: identity.assignmentKey,
-    };
   }
 
   async getTemplateDetail(
@@ -641,6 +703,21 @@ export class SubmissionsService {
 
     return timingSafeEqual(providedBuffer, expectedBuffer);
   }
+
+  private assertValidBulkAccessCode(providedCode: string) {
+    const normalizedProvidedCode = providedCode.trim();
+    const expectedCode = apiRuntimeConfig.publicUploads.bulkAccessCode;
+
+    const providedBuffer = Buffer.from(normalizedProvidedCode);
+    const expectedBuffer = Buffer.from(expectedCode);
+
+    if (
+      providedBuffer.length !== expectedBuffer.length
+      || !timingSafeEqual(providedBuffer, expectedBuffer)
+    ) {
+      throw new BadRequestException("That bulk upload access code is invalid");
+    }
+  }
 }
 
 function mapUploadPurposeToPreparationKind(purpose: CreateUploadBatchDto["purpose"]) {
@@ -658,6 +735,37 @@ function ensureZipFileName(fileName: string) {
   if (!fileName.toLowerCase().endsWith(".zip")) {
     throw new BadRequestException("uploaded archive must be a zip file");
   }
+}
+
+function getSubmissionIdentityRevealMode(input: {
+  encryptedIdentity: string | null;
+  purpose: UploadPurpose;
+  uploaderId: string | null;
+}) {
+  if (input.encryptedIdentity) {
+    return "encrypted" as const;
+  }
+
+  if (isBulkPublicUploadBatch(input)) {
+    return "display_name" as const;
+  }
+
+  return null;
+}
+
+function isPublicAnonymousStudentUploadBatch(input: {
+  purpose: UploadPurpose;
+  uploaderId: string | null;
+}) {
+  return input.purpose === UploadPurpose.STUDENT_SUBMISSION && input.uploaderId === null;
+}
+
+function isBulkPublicUploadBatch(input: {
+  encryptedIdentity: string | null;
+  purpose: UploadPurpose;
+  uploaderId: string | null;
+}) {
+  return isPublicAnonymousStudentUploadBatch(input) && input.encryptedIdentity === null;
 }
 
 function normalizeAssignmentKey(value: string) {

@@ -196,6 +196,7 @@ export interface AssignmentArtifactDetail {
   versionNumber?: number;
   createdAt: string;
   hasEncryptedIdentity?: boolean;
+  identityRevealMode?: "encrypted" | "display_name" | null;
   fileCount: number;
   concatenatedSource: string;
   sourceMap: Array<{
@@ -213,9 +214,9 @@ export interface AssignmentArtifactDetail {
 
 export interface SubmissionIdentityRevealResponse {
   studentName: string;
-  studentNumber: string;
+  studentNumber: string | null;
   studentEmail: string | null;
-  assignmentKey: string;
+  assignmentKey: string | null;
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -393,6 +394,27 @@ export async function uploadPublicStudentArchive(input: {
     uploadBatchId: string;
     statusToken: string;
   }>("/uploads/public/student/archive", {
+    method: "POST",
+    body,
+  });
+}
+
+export async function uploadPublicBulkStudentArchive(input: {
+  assignmentKey: string;
+  bulkAccessCode: string;
+  file: File;
+}) {
+  const body = new FormData();
+  body.append("assignmentKey", input.assignmentKey.trim());
+  body.append("bulkAccessCode", input.bulkAccessCode);
+  body.append("file", input.file, "bulk-current-submissions.zip");
+
+  return apiFetch<{
+    assignmentId: string;
+    assignmentLanguage: "java" | "c" | "cpp";
+    uploadBatchId: string;
+    statusToken: string;
+  }>("/uploads/public/student/bulk-archive", {
     method: "POST",
     body,
   });
