@@ -21,7 +21,7 @@ services:
       dockerfile: Dockerfile.api
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/similarity_app?schema=public
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
       API_HOST: 0.0.0.0
       API_PORT: 3001
@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile.worker
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/similarity_app?schema=public
+      DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: redis://redis:6379
       OBJECT_STORAGE_MODE: filesystem
       OBJECT_STORAGE_ROOT: /app/var/object-storage
