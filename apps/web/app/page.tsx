@@ -2,7 +2,7 @@ import { StudentSubmissionPanel } from "../components/student-submission-panel";
 
 export default function HomePage() {
   return (
-    <main className="page-shell">
+    <main className="public-shell">
       <StudentSubmissionPanel />
     </main>
   );

@@ -1,10 +1,11 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { QueryProvider } from "../components/query-provider";
+import { ToastProvider } from "../components/toast-provider";
 
 export const metadata: Metadata = {
-  title: "Similarity App",
-  description: "Source-code similarity and plagiarism review",
+  title: "Anti-Vibe Coder",
+  description: "Academic source-code similarity review platform",
 };
 
 export default function RootLayout({
@@ -13,7 +14,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </QueryProvider>
       </body>
     </html>
   );

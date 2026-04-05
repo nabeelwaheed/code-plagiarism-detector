@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { signupProfessor } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
+import { useToast } from "./toast-provider";
 
 export function ProfessorSignupForm() {
   const router = useRouter();
+  const { pushToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -26,6 +28,11 @@ export function ProfessorSignupForm() {
   const signupMutation = useMutation({
     mutationFn: () => signupProfessor(email, password),
     onSuccess: () => {
+      pushToast({
+        tone: "success",
+        title: "Professor account created",
+        description: "You can start creating assignments immediately.",
+      });
       router.push("/professor");
     },
   });
@@ -34,7 +41,7 @@ export function ProfessorSignupForm() {
     event.preventDefault();
 
     if (password !== confirmPassword) {
-      setValidationError("Passwords do not match");
+      setValidationError("Passwords do not match.");
       return;
     }
 
@@ -43,38 +50,78 @@ export function ProfessorSignupForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="panel form-stack">
-      <label className="field">
-        <span>Email</span>
-        <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
-      </label>
-      <label className="field">
-        <span>Password</span>
-        <input
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          type="password"
-        />
-      </label>
-      <label className="field">
-        <span>Confirm password</span>
-        <input
-          value={confirmPassword}
-          onChange={(event) => setConfirmPassword(event.target.value)}
-          type="password"
-        />
-      </label>
-      <button className="primary-button" disabled={signupMutation.isPending} type="submit">
-        {signupMutation.isPending ? "Creating account..." : "Create professor account"}
-      </button>
-      {validationError ? <p className="error-text">{validationError}</p> : null}
-      {signupMutation.error ? <p className="error-text">{signupMutation.error.message}</p> : null}
-      <p className="muted-text">
+    <section className="auth-card fade-up">
+      <div className="auth-copy">
+        <div className="icon-badge" aria-hidden="true">
+          +
+        </div>
+        <p className="eyebrow">Professor Access</p>
+        <h1 className="page-title">Create a professor account</h1>
+        <p className="secondary-text">
+          Open signup is enabled for this project. Create an account to manage assignments and
+          review results.
+        </p>
+      </div>
+
+      <form className="form-stack" onSubmit={handleSubmit}>
+        <div className="input-grid">
+          <label className="field">
+            <span className="field-label">Email</span>
+            <input
+              className="input-control"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              type="email"
+              autoComplete="email"
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Password</span>
+            <input
+              className="input-control"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              autoComplete="new-password"
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Confirm password</span>
+            <input
+              className="input-control"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              type="password"
+              autoComplete="new-password"
+            />
+          </label>
+        </div>
+
+        {validationError ? (
+          <div className="error-panel">
+            <strong>Check your password confirmation</strong>
+            <p>{validationError}</p>
+          </div>
+        ) : null}
+
+        {signupMutation.error ? (
+          <div className="error-panel">
+            <strong>Account creation failed</strong>
+            <p>{signupMutation.error.message}</p>
+          </div>
+        ) : null}
+
+        <button className="primary-button button-full" disabled={signupMutation.isPending} type="submit">
+          {signupMutation.isPending ? "Creating account..." : "Create professor account"}
+        </button>
+      </form>
+
+      <p className="helper-text">
         Already have an account?{" "}
         <Link className="text-link" href="/login">
           Sign in
         </Link>
       </p>
-    </form>
+    </section>
   );
 }

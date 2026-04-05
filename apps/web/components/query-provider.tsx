@@ -6,7 +6,15 @@ import { useState } from "react";
 export function QueryProvider({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const [client] = useState(() => new QueryClient());
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            refetchOnWindowFocus: false,
+          },
+        },
+      }),
+  );
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
-

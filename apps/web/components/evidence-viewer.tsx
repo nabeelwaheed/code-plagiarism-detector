@@ -4,16 +4,29 @@ import Editor from "@monaco-editor/react";
 import type { ViewerMatch } from "@similarity/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
+import { spansOverlap } from "../lib/view-models";
 import {
+  byteOffsetToEditorPosition,
   byteSpanToEditorRange,
   editorPositionToByteOffset,
   hexToTransparentFill,
   spanContainsByteOffset,
 } from "./evidence-viewer-utils";
 
+interface ViewerFile {
+  id: string;
+  relativePath: string;
+  canonicalOrder: number;
+  byteStart: number;
+  byteEnd: number;
+  archivePath?: string;
+}
+
 interface EvidenceViewerProps {
   language?: string;
+  leftFiles: ViewerFile[];
   leftSource: string;
+  rightFiles: ViewerFile[];
   rightSource: string;
   matches: ViewerMatch[];
   leftTitle?: string;
@@ -24,46 +37,83 @@ interface EvidenceViewerProps {
 
 export function EvidenceViewer({
   language = "plaintext",
-  leftSource,
-  rightSource,
-  matches,
-  leftTitle = "Left submission",
-  rightTitle = "Right submission",
+  leftFiles,
   leftLabel = "Left side",
+  leftSource,
+  leftTitle = "Left submission",
+  matches,
+  rightFiles,
   rightLabel = "Right side",
+  rightSource,
+  rightTitle = "Right submission",
 }: EvidenceViewerProps) {
   const leftEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const rightEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const leftDecorationIdsRef = useRef<string[]>([]);
   const rightDecorationIdsRef = useRef<string[]>([]);
-  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(matches[0]?.matchId ?? null);
+  const [activeLeftFileId, setActiveLeftFileId] = useState(leftFiles[0]?.id ?? "");
+  const [activeRightFileId, setActiveRightFileId] = useState(rightFiles[0]?.id ?? "");
+
+  const orderedMatches = useMemo(() => matches, [matches]);
+  const activeMatchIndex = orderedMatches.findIndex((match) => match.matchId === activeMatchId);
 
   const colors = useMemo(() => {
     const colorMap = new Map<string, string>();
-    matches.forEach((match, index) => {
+    orderedMatches.forEach((match, index) => {
       colorMap.set(match.matchId, createMatchColor(index));
     });
     return colorMap;
-  }, [matches]);
+  }, [orderedMatches]);
 
   const codeMatches = useMemo(
-    () => matches.filter((match) => match.kind === "code"),
-    [matches],
+    () => orderedMatches.filter((match) => match.kind === "code"),
+    [orderedMatches],
   );
   const commentMatches = useMemo(
-    () => matches.filter((match) => match.kind === "comment"),
-    [matches],
+    () => orderedMatches.filter((match) => match.kind === "comment"),
+    [orderedMatches],
+  );
+
+  const leftFilesWithCounts = useMemo(
+    () =>
+      leftFiles.map((file) => ({
+        ...file,
+        matchCount: orderedMatches.filter((match) =>
+          spansOverlap(
+            { byteStart: file.byteStart, byteEnd: file.byteEnd },
+            { byteStart: match.left.byteStart, byteEnd: match.left.byteEnd },
+          )
+        ).length,
+      })),
+    [leftFiles, orderedMatches],
+  );
+
+  const rightFilesWithCounts = useMemo(
+    () =>
+      rightFiles.map((file) => ({
+        ...file,
+        matchCount: orderedMatches.filter((match) =>
+          spansOverlap(
+            { byteStart: file.byteStart, byteEnd: file.byteEnd },
+            { byteStart: match.right.byteStart, byteEnd: match.right.byteEnd },
+          )
+        ).length,
+      })),
+    [orderedMatches, rightFiles],
   );
 
   useEffect(() => {
-    if (activeMatchId && !matches.some((match) => match.matchId === activeMatchId)) {
-      setActiveMatchId(null);
+    if (activeMatchId && orderedMatches.some((match) => match.matchId === activeMatchId)) {
+      return;
     }
-  }, [activeMatchId, matches]);
+
+    setActiveMatchId(orderedMatches[0]?.matchId ?? null);
+  }, [activeMatchId, orderedMatches]);
 
   const revealMatch = (matchId: string) => {
-    const match = matches.find((candidate) => candidate.matchId === matchId);
+    const match = orderedMatches.find((candidate) => candidate.matchId === matchId);
     const leftEditor = leftEditorRef.current;
     const rightEditor = rightEditorRef.current;
     if (!match || !leftEditor || !rightEditor) {
@@ -74,17 +124,46 @@ export function EvidenceViewer({
     const rightRange = byteSpanToEditorRange(rightSource, match.right.byteStart, match.right.byteEnd);
 
     setActiveMatchId(matchId);
+    setActiveLeftFileId(findContainingFileId(leftFilesWithCounts, match.left.byteStart));
+    setActiveRightFileId(findContainingFileId(rightFilesWithCounts, match.right.byteStart));
     leftEditor.revealRangeInCenter(leftRange);
-    leftEditor.setPosition({
-      lineNumber: leftRange.startLineNumber,
-      column: leftRange.startColumn,
-    });
+    leftEditor.setPosition({ lineNumber: leftRange.startLineNumber, column: leftRange.startColumn });
     rightEditor.revealRangeInCenter(rightRange);
-    rightEditor.setPosition({
-      lineNumber: rightRange.startLineNumber,
-      column: rightRange.startColumn,
-    });
-    rightEditor.focus();
+    rightEditor.setPosition({ lineNumber: rightRange.startLineNumber, column: rightRange.startColumn });
+  };
+
+  const revealFile = (
+    side: "left" | "right",
+    file: { id: string; byteStart: number },
+  ) => {
+    const editor = side === "left" ? leftEditorRef.current : rightEditorRef.current;
+    const source = side === "left" ? leftSource : rightSource;
+    if (!editor) {
+      return;
+    }
+
+    const position = byteOffsetToEditorPosition(source, file.byteStart);
+    editor.revealPositionInCenter(position);
+    editor.setPosition(position);
+
+    if (side === "left") {
+      setActiveLeftFileId(file.id);
+    } else {
+      setActiveRightFileId(file.id);
+    }
+  };
+
+  const stepMatch = (direction: "next" | "previous") => {
+    if (orderedMatches.length === 0) {
+      return;
+    }
+
+    const currentIndex = activeMatchIndex >= 0 ? activeMatchIndex : 0;
+    const nextIndex =
+      direction === "next"
+        ? (currentIndex + 1) % orderedMatches.length
+        : (currentIndex - 1 + orderedMatches.length) % orderedMatches.length;
+    revealMatch(orderedMatches[nextIndex]!.matchId);
   };
 
   useEffect(() => {
@@ -98,52 +177,14 @@ export function EvidenceViewer({
 
     leftDecorationIdsRef.current = leftEditor.deltaDecorations(
       leftDecorationIdsRef.current,
-      matches.map((match) => {
-        const range = byteSpanToEditorRange(leftSource, match.left.byteStart, match.left.byteEnd);
-        const isActive = activeMatchId === match.matchId;
-        return {
-          range: new monaco.Range(
-            range.startLineNumber,
-            range.startColumn,
-            range.endLineNumber,
-            range.endColumn,
-          ),
-          options: {
-            className: isActive
-              ? `match-outline-active-${match.matchId}`
-              : `match-outline-${match.matchId}`,
-            inlineClassName: isActive
-              ? `match-inline-active-${match.matchId}`
-              : `match-inline-${match.matchId}`,
-          },
-        };
-      }),
+      orderedMatches.map((match) => buildDecoration(monaco, leftSource, match.left, match.matchId, match.matchId === activeMatchId)),
     );
 
     rightDecorationIdsRef.current = rightEditor.deltaDecorations(
       rightDecorationIdsRef.current,
-      matches.map((match) => {
-        const range = byteSpanToEditorRange(rightSource, match.right.byteStart, match.right.byteEnd);
-        const isActive = activeMatchId === match.matchId;
-        return {
-          range: new monaco.Range(
-            range.startLineNumber,
-            range.startColumn,
-            range.endLineNumber,
-            range.endColumn,
-          ),
-          options: {
-            className: isActive
-              ? `match-outline-active-${match.matchId}`
-              : `match-outline-${match.matchId}`,
-            inlineClassName: isActive
-              ? `match-inline-active-${match.matchId}`
-              : `match-inline-${match.matchId}`,
-          },
-        };
-      }),
+      orderedMatches.map((match) => buildDecoration(monaco, rightSource, match.right, match.matchId, match.matchId === activeMatchId)),
     );
-  }, [activeMatchId, leftSource, matches, rightSource]);
+  }, [activeMatchId, leftSource, orderedMatches, rightSource]);
 
   useEffect(() => {
     const leftEditor = leftEditorRef.current;
@@ -159,7 +200,8 @@ export function EvidenceViewer({
       }
 
       const byteOffset = editorPositionToByteOffset(leftSource, event.target.position);
-      const clickedMatch = matches.find((match) =>
+      setActiveLeftFileId(findContainingFileId(leftFilesWithCounts, byteOffset));
+      const clickedMatch = orderedMatches.find((match) =>
         spanContainsByteOffset(match.left.byteStart, match.left.byteEnd, byteOffset),
       );
       if (clickedMatch) {
@@ -173,7 +215,8 @@ export function EvidenceViewer({
       }
 
       const byteOffset = editorPositionToByteOffset(rightSource, event.target.position);
-      const clickedMatch = matches.find((match) =>
+      setActiveRightFileId(findContainingFileId(rightFilesWithCounts, byteOffset));
+      const clickedMatch = orderedMatches.find((match) =>
         spanContainsByteOffset(match.right.byteStart, match.right.byteEnd, byteOffset),
       );
       if (clickedMatch) {
@@ -185,184 +228,219 @@ export function EvidenceViewer({
       leftSubscription.dispose();
       rightSubscription.dispose();
     };
-  }, [leftSource, matches, rightSource]);
+  }, [leftFilesWithCounts, leftSource, orderedMatches, rightFilesWithCounts, rightSource]);
 
   const dynamicStyles = useMemo(
     () =>
-      matches
+      orderedMatches
         .map((match) => {
-          const color = colors.get(match.matchId) ?? "#2563eb";
+          const color = colors.get(match.matchId) ?? "#aa0000";
           return `
             .match-inline-${match.matchId} {
-              background: ${hexToTransparentFill(color, 0.05)};
-              border-bottom: 1px solid ${hexToTransparentFill(color, 0.35)};
+              background: ${hexToTransparentFill(color, 0.08)};
+              border-bottom: 1px solid ${hexToTransparentFill(color, 0.28)};
             }
             .match-inline-active-${match.matchId} {
-              background: ${hexToTransparentFill(color, 0.34)};
+              background: ${hexToTransparentFill(color, 0.28)};
               border-bottom: 2px solid ${color};
               border-radius: 2px;
             }
             .match-outline-${match.matchId} {
-              border: 1px solid ${hexToTransparentFill(color, 0.18)};
+              border: 1px solid ${hexToTransparentFill(color, 0.15)};
             }
             .match-outline-active-${match.matchId} {
               border: 1px solid ${color};
               box-shadow: inset 0 0 0 1px ${color};
-              background: ${hexToTransparentFill(color, 0.1)};
+              background: ${hexToTransparentFill(color, 0.08)};
             }
           `;
         })
         .join("\n"),
-    [colors, matches],
+    [colors, orderedMatches],
   );
 
   return (
-    <div className="evidence-shell">
+    <div className="comparison-workspace">
       <style>{dynamicStyles}</style>
-      <div className="evidence-grid">
-        <div className="evidence-pane">
-          <div className="evidence-pane-head">
+      <div className="comparison-toolbar">
+        <div className="stack-xs">
+          <strong>Match navigation</strong>
+          <span className="helper-text">
+            Use buttons, chips, or highlighted spans to move through paired evidence.
+          </span>
+        </div>
+        <div className="match-navigator">
+          <button className="secondary-button button-compact" type="button" onClick={() => stepMatch("previous")}>
+            Prev
+          </button>
+          <span className="status-pill tone-neutral">
+            {orderedMatches.length === 0 ? "0 / 0" : `${activeMatchIndex + 1} / ${orderedMatches.length}`}
+          </span>
+          <button className="secondary-button button-compact" type="button" onClick={() => stepMatch("next")}>
+            Next
+          </button>
+        </div>
+      </div>
+
+      <div className="match-chip-row">
+        {codeMatches.map((match, index) => renderMatchChip(match, index, activeMatchId, colors, revealMatch))}
+        {commentMatches.map((match, index) =>
+          renderMatchChip(match, index, activeMatchId, colors, revealMatch, "Comment"),
+        )}
+      </div>
+
+      <div className="comparison-grid">
+        <div className="code-pane">
+          <div className="code-pane-header">
             <strong>{leftTitle}</strong>
-            <span>
-              {leftLabel} - click a highlighted region to jump to its pair
+            <span className="helper-text">
+              {leftLabel} · file-aware navigation stays aligned with byte spans
             </span>
           </div>
+          <div className="file-tabs">
+            {leftFilesWithCounts.map((file) => (
+              <button
+                className={`file-tab ${activeLeftFileId === file.id ? "is-active" : ""}`}
+                key={file.id}
+                type="button"
+                onClick={() => revealFile("left", file)}
+              >
+                {file.relativePath} ({file.matchCount})
+              </button>
+            ))}
+          </div>
           <Editor
-            height="68vh"
+            height="72vh"
             defaultLanguage={language}
             value={leftSource}
             onMount={(editor, monaco) => {
               leftEditorRef.current = editor;
               monacoRef.current = monaco;
+              ensureReviewerTheme(monaco);
             }}
-            options={{
-              readOnly: true,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              lineNumbersMinChars: 3,
-              padding: { top: 14, bottom: 14 },
-              fontSize: 13,
-            }}
-            theme="vs-dark"
+            options={editorOptions}
+            theme="anti-vibe-review-light"
           />
         </div>
 
-        <div className="evidence-pane">
-          <div className="evidence-pane-head">
+        <div className="code-pane">
+          <div className="code-pane-header">
             <strong>{rightTitle}</strong>
-            <span>
-              {rightLabel} - colors stay matched on both sides
+            <span className="helper-text">
+              {rightLabel} · active matches keep the same color on both sides
             </span>
           </div>
+          <div className="file-tabs">
+            {rightFilesWithCounts.map((file) => (
+              <button
+                className={`file-tab ${activeRightFileId === file.id ? "is-active" : ""}`}
+                key={file.id}
+                type="button"
+                onClick={() => revealFile("right", file)}
+              >
+                {file.relativePath} ({file.matchCount})
+              </button>
+            ))}
+          </div>
           <Editor
-            height="68vh"
+            height="72vh"
             defaultLanguage={language}
             value={rightSource}
             onMount={(editor, monaco) => {
               rightEditorRef.current = editor;
               monacoRef.current = monaco;
+              ensureReviewerTheme(monaco);
             }}
-            options={{
-              readOnly: true,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              lineNumbersMinChars: 3,
-              padding: { top: 14, bottom: 14 },
-              fontSize: 13,
-            }}
-            theme="vs-dark"
+            options={editorOptions}
+            theme="anti-vibe-review-light"
           />
-        </div>
-      </div>
-
-      <div className="evidence-legend">
-        <div className="stack-sm">
-          <strong>Matches</strong>
-          <span className="pair-note">Select a match to scroll both panes and highlight the paired regions.</span>
-        </div>
-        <div className="legend-groups-layout">
-          {codeMatches.length > 0 ? (
-            <LegendGroup
-              activeMatchId={activeMatchId}
-              colors={colors}
-              matches={codeMatches}
-              onSelectMatch={revealMatch}
-              position="left"
-              title="Code matches"
-            />
-          ) : null}
-          {commentMatches.length > 0 ? (
-            <LegendGroup
-              activeMatchId={activeMatchId}
-              colors={colors}
-              matches={commentMatches}
-              onSelectMatch={revealMatch}
-              position="right"
-              title="Comment matches"
-            />
-          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-function LegendGroup({
-  activeMatchId,
-  colors,
-  matches,
-  onSelectMatch,
-  position,
-  title,
-}: {
-  activeMatchId: string | null;
-  colors: Map<string, string>;
-  matches: ViewerMatch[];
-  onSelectMatch: (matchId: string) => void;
-  position: "left" | "right";
-  title: string;
-}) {
+const editorOptions: Monaco.editor.IStandaloneEditorConstructionOptions = {
+  readOnly: true,
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  lineNumbersMinChars: 3,
+  padding: { top: 16, bottom: 16 },
+  fontSize: 13,
+  fontFamily: '"JetBrains Mono", "SFMono-Regular", Consolas, monospace',
+  wordWrap: "off",
+};
+
+function renderMatchChip(
+  match: ViewerMatch,
+  index: number,
+  activeMatchId: string | null,
+  colors: Map<string, string>,
+  revealMatch: (matchId: string) => void,
+  labelPrefix?: string,
+) {
+  const color = colors.get(match.matchId) ?? "#aa0000";
+  const active = activeMatchId === match.matchId;
+  const prefix = labelPrefix ?? (match.kind === "comment" ? "Comment" : "Code");
+
   return (
-    <section className={`legend-group legend-group-${position}`}>
-      <div className="legend-group-head">
-        <strong>{title}</strong>
-        <span className="pair-note">{matches.length} {matches.length === 1 ? "match" : "matches"}</span>
-      </div>
-      <div className="legend-grid">
-        {matches.map((match, index) => {
-          const color = colors.get(match.matchId) ?? "#2563eb";
-          const isActive = activeMatchId === match.matchId;
-          return (
-            <button
-              key={match.matchId}
-              type="button"
-              onClick={() => onSelectMatch(match.matchId)}
-              className={`legend-button${isActive ? " is-active" : ""}`}
-              style={{
-                borderColor: isActive ? color : undefined,
-                background: isActive ? hexToTransparentFill(color, 0.18) : undefined,
-              }}
-            >
-              <span
-                className="legend-swatch"
-                style={{ background: color }}
-              />
-              {formatMatchLabel(match.kind, index)}
-            </button>
-          );
-        })}
-      </div>
-    </section>
+    <button
+      className={`match-chip ${active ? "is-active" : ""}`}
+      key={match.matchId}
+      type="button"
+      onClick={() => revealMatch(match.matchId)}
+      style={{
+        borderColor: active ? color : undefined,
+        background: active ? hexToTransparentFill(color, 0.12) : undefined,
+      }}
+    >
+      <span className="legend-swatch" style={{ background: color }} />
+      {prefix} {index + 1}
+    </button>
   );
 }
 
-function formatMatchLabel(kind: ViewerMatch["kind"], index: number) {
-  return `${kind === "comment" ? "Comment" : "Code"} ${index + 1}`;
+function buildDecoration(
+  monaco: typeof Monaco,
+  source: string,
+  span: { byteStart: number; byteEnd: number },
+  matchId: string,
+  isActive: boolean,
+) {
+  const range = byteSpanToEditorRange(source, span.byteStart, span.byteEnd);
+  return {
+    range: new monaco.Range(range.startLineNumber, range.startColumn, range.endLineNumber, range.endColumn),
+    options: {
+      className: isActive ? `match-outline-active-${matchId}` : `match-outline-${matchId}`,
+      inlineClassName: isActive ? `match-inline-active-${matchId}` : `match-inline-${matchId}`,
+    },
+  };
+}
+
+function ensureReviewerTheme(monaco: typeof Monaco) {
+  monaco.editor.defineTheme("anti-vibe-review-light", {
+    base: "vs",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": "#ffffff",
+      "editor.lineHighlightBackground": "#f8fafc",
+      "editorGutter.background": "#f8fafc",
+      "editorLineNumber.foreground": "#94a3b8",
+      "editorLineNumber.activeForeground": "#475569",
+      "editor.selectionBackground": "rgba(170,0,0,0.10)",
+      "editor.inactiveSelectionBackground": "rgba(170,0,0,0.06)",
+    },
+  });
 }
 
 function createMatchColor(index: number) {
   const hue = Math.round((index * 137.508) % 360);
-  return hslToHex(hue, 72, 52);
+  return hslToHex(hue, 68, 48);
+}
+
+function findContainingFileId(files: Array<{ id: string; byteStart: number; byteEnd: number }>, byteOffset: number) {
+  return files.find((file) => byteOffset >= file.byteStart && byteOffset < file.byteEnd)?.id ?? files[0]?.id ?? "";
 }
 
 function hslToHex(hue: number, saturation: number, lightness: number) {
