@@ -22,12 +22,32 @@ export function getUserFacingUploadFailureMessage(error: unknown) {
     return "That archive contains invalid file paths and could not be processed.";
   }
 
-  if (normalizedMessage === "bulk current archive must contain first-layer child zip files") {
-    return "That bulk archive must contain direct child zip files, with one child zip per submission.";
+  if (
+    normalizedMessage
+    === "bulk current archive must contain child zip files directly at the top level or inside one top-level folder"
+  ) {
+    return "That bulk archive must contain direct child zip files, or one top-level folder containing child zip files, with one child zip per submission.";
   }
 
-  if (normalizedMessage === "bulk current archive may only contain first-layer child zip files") {
-    return "That bulk archive can only contain direct child zip files at the top level.";
+  if (
+    normalizedMessage
+    === "bulk current archive may only contain direct child zip files or one top-level folder containing child zip files"
+  ) {
+    return "That bulk archive can only contain direct child zip files at the top level, or one top-level folder containing child zip files.";
+  }
+
+  if (
+    normalizedMessage
+    === "historical archive must contain child zip files directly at the top level or inside one top-level folder"
+  ) {
+    return "That historical archive must contain child zip files either directly at the top level or inside one top-level folder.";
+  }
+
+  if (
+    normalizedMessage
+    === "historical archive may only contain direct child zip files or one top-level folder containing child zip files"
+  ) {
+    return "That historical archive can only contain direct child zip files at the top level, or one top-level folder containing child zip files.";
   }
 
   if (normalizedMessage === "bulk current archive contains duplicate submission names after sanitization") {

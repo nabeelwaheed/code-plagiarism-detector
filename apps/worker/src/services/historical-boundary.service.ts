@@ -3,27 +3,19 @@ import type {
   ArchiveEntryDescriptor,
   HistoricalSubmissionBoundary,
 } from "@similarity/shared";
+import { resolveChildSubmissionZipPaths } from "./child-submission-archive-layout.service.js";
 
 export function detectHistoricalSubmissionBoundaries(
   entries: ArchiveEntryDescriptor[],
 ): HistoricalSubmissionBoundary[] {
-  const firstLayerChildZips = entries
-    .filter((entry) => !entry.isDirectory)
-    .filter((entry) => {
-      const normalized = normalizePath(entry.relativePath);
-      return normalized.split("/").length === 1 && normalized.toLowerCase().endsWith(".zip");
-    })
-    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+  const childZipPaths = resolveChildSubmissionZipPaths({
+    archiveKind: "historical",
+    entries,
+  });
 
-  if (firstLayerChildZips.length === 0) {
-    throw new Error(
-      "historical archive must contain first-layer child zip files that define submission boundaries",
-    );
-  }
-
-  return firstLayerChildZips.map((entry, index) => ({
-    childZipPath: normalizePath(entry.relativePath),
-    submissionKey: `historical-${index + 1}-${path.basename(entry.relativePath, ".zip")}`,
+  return childZipPaths.map((childZipPath, index) => ({
+    childZipPath: normalizePath(childZipPath),
+    submissionKey: `historical-${index + 1}-${path.basename(childZipPath, ".zip")}`,
   }));
 }
 

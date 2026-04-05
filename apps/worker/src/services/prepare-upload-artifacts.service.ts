@@ -14,6 +14,7 @@ import {
   listArchiveEntries,
   readArchiveEntryBuffer,
 } from "./archive-extraction.service.js";
+import { resolveChildSubmissionZipPaths } from "./child-submission-archive-layout.service.js";
 import { detectHistoricalSubmissionBoundaries } from "./historical-boundary.service.js";
 import type {
   PreparedSubmissionPersistenceInput,
@@ -133,7 +134,10 @@ async function prepareBulkCurrentSubmissionArtifacts(input: {
   uploadBatchId: string;
   archiveBuffer: Buffer;
 }) {
-  const childZipPaths = listBulkCurrentChildZipPaths(input.archiveBuffer);
+  const childZipPaths = resolveChildSubmissionZipPaths({
+    archiveKind: "bulk_current",
+    entries: listArchiveEntries(input.archiveBuffer),
+  });
   const sanitizedNames = new Set<string>();
   const submissions: PreparedSubmissionPersistenceInput[] = [];
 
@@ -288,43 +292,6 @@ function slugifyArtifactName(value: string) {
 function createSubmissionAlias(encryptedIdentity: string) {
   const digest = createHash("sha256").update(encryptedIdentity).digest("hex").slice(0, 10).toUpperCase();
   return `SUB-${digest}`;
-}
-
-function listBulkCurrentChildZipPaths(archiveBuffer: Buffer) {
-  const firstLayerFiles = listArchiveEntries(archiveBuffer)
-    .filter((entry) => !entry.isDirectory)
-    .filter((entry) => entry.relativePath.split("/").length === 1);
-
-  const meaningfulFirstLayerFiles = firstLayerFiles.filter(
-    (entry) => !isIgnoredBulkRootEntry(entry.relativePath),
-  );
-  const childZipPaths = meaningfulFirstLayerFiles
-    .filter((entry) => entry.relativePath.toLowerCase().endsWith(".zip"))
-    .map((entry) => entry.relativePath)
-    .sort((left, right) => left.localeCompare(right));
-  const invalidFirstLayerFiles = meaningfulFirstLayerFiles.filter(
-    (entry) => !entry.relativePath.toLowerCase().endsWith(".zip"),
-  );
-
-  if (childZipPaths.length === 0) {
-    throw new Error("bulk current archive must contain first-layer child zip files");
-  }
-
-  if (invalidFirstLayerFiles.length > 0) {
-    throw new Error("bulk current archive may only contain first-layer child zip files");
-  }
-
-  return childZipPaths;
-}
-
-function isIgnoredBulkRootEntry(relativePath: string) {
-  const baseName = path.posix.basename(relativePath);
-  return (
-    relativePath.startsWith("__MACOSX/")
-    || baseName === ".DS_Store"
-    || baseName === "Thumbs.db"
-    || baseName.startsWith("._")
-  );
 }
 
 function sanitizeBulkSubmissionDisplayName(childZipPath: string) {
