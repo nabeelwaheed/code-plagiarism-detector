@@ -94,10 +94,9 @@ export function ProfessorDashboard() {
       <section className="hero-card">
         <div>
           <p className="eyebrow">Professor Workspace</p>
-          <h1>Assignment hubs, uploads, and suspicious-pair review</h1>
-          <p>
-            Create single-language assignments, share the generated keyID, upload historical and
-            template archives, and review the latest suspicious pairs.
+          <h1>Assignment hubs and pair review</h1>
+          <p className="subtle-text">
+            Create assignments, share keyIDs, and review uploads and suspicious pairs.
           </p>
         </div>
         <button
@@ -117,7 +116,7 @@ export function ProfessorDashboard() {
 
       <section className="panel">
         <h2>Create Assignment</h2>
-        <form className="form-stack" onSubmit={handleCreateAssignment}>
+        <form className="form-stack form-compact" onSubmit={handleCreateAssignment}>
           <label className="field">
             <span>
               Assignment Title <span className="required-mark">*</span>
@@ -154,7 +153,6 @@ export function ProfessorDashboard() {
       <section className="panel">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Assignments</p>
             <h2>Your active hubs</h2>
           </div>
         </div>
@@ -186,11 +184,11 @@ export function ProfessorDashboard() {
                   </button>
                 </div>
               </div>
-              <p>
+              <p className="subtle-text">
                 Current submissions: {assignment.submissionCounts.current} | Historical:{" "}
                 {assignment.submissionCounts.historical}
               </p>
-              <p>
+              <p className="subtle-text">
                 Latest run:{" "}
                 {assignment.latestComparisonRun
                   ? `${assignment.latestComparisonRun.status} (${assignment.latestComparisonRun.pairCount} pairs)`

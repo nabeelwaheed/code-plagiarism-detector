@@ -618,15 +618,19 @@ export class SubmissionsService {
       throw new NotFoundException("That assignment no longer exists");
     }
 
-    if (assignment.submissions.length === 0) {
-      throw new BadRequestException("There are no submissions available to download.");
+    const currentSubmissions = assignment.submissions.filter(
+      (submission) => submission.kind === "CURRENT",
+    );
+
+    if (currentSubmissions.length === 0) {
+      throw new BadRequestException("There are no current submissions available to download.");
     }
 
     const entries: Record<string, Uint8Array> = {};
     const folderCounts = new Map<string, number>();
 
-    for (const submission of assignment.submissions) {
-      const baseFolder = `${submission.kind.toLowerCase()}/${sanitizeArchiveSegment(submission.displayName)}`;
+    for (const submission of currentSubmissions) {
+      const baseFolder = sanitizeArchiveSegment(submission.displayName);
       const usageCount = (folderCounts.get(baseFolder) ?? 0) + 1;
       folderCounts.set(baseFolder, usageCount);
       const uniqueFolder = usageCount > 1 ? `${baseFolder}-${usageCount}` : baseFolder;
