@@ -60,10 +60,12 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
         );
         matches.extend(comment_matches);
 
-        let similarity_score = symmetric_coverage_score(
+        let similarity_score = compute_code_similarity_score(
+            &gst_result.tiles,
             gst_result.matched_token_count,
             left.normalized_tokens.len(),
             right.normalized_tokens.len(),
+            params.gst_min_match_length,
         );
 
         pair_results.push(PairAnalysisResult {
@@ -232,6 +234,117 @@ fn map_code_matches(left: &ParsedSubmission, right: &ParsedSubmission, tiles: &[
     }
 
     matches
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CodeSimilarityMetrics {
+    coverage_left: f64,
+    coverage_right: f64,
+    coverage_anchor: f64,
+    longest_tile_len: usize,
+    tile_count: usize,
+    average_tile_len: f64,
+    concentration_ratio: f64,
+    longest_tile_ratio_of_smaller_submission: f64,
+    contiguity_factor: f64,
+    fragmentation_factor: f64,
+    similarity_score: f64,
+}
+
+fn compute_code_similarity_score(
+    tiles: &[Tile],
+    matched_token_count: usize,
+    left_len: usize,
+    right_len: usize,
+    gst_min_match_length: usize,
+) -> f64 {
+    compute_code_similarity_metrics(
+        tiles,
+        matched_token_count,
+        left_len,
+        right_len,
+        gst_min_match_length,
+    )
+    .similarity_score
+}
+
+fn compute_code_similarity_metrics(
+    tiles: &[Tile],
+    matched_token_count: usize,
+    left_len: usize,
+    right_len: usize,
+    gst_min_match_length: usize,
+) -> CodeSimilarityMetrics {
+    if matched_token_count == 0 || tiles.is_empty() || left_len == 0 || right_len == 0 {
+        return CodeSimilarityMetrics {
+            coverage_left: 0.0,
+            coverage_right: 0.0,
+            coverage_anchor: 0.0,
+            longest_tile_len: 0,
+            tile_count: tiles.len(),
+            average_tile_len: 0.0,
+            concentration_ratio: 0.0,
+            longest_tile_ratio_of_smaller_submission: 0.0,
+            contiguity_factor: 0.0,
+            fragmentation_factor: 0.0,
+            similarity_score: 0.0,
+        };
+    }
+
+    let coverage_left = matched_token_count as f64 / left_len as f64;
+    let coverage_right = matched_token_count as f64 / right_len as f64;
+    let harmonic_coverage = symmetric_coverage_score(matched_token_count, left_len, right_len);
+    let geometric_coverage = (coverage_left * coverage_right).sqrt();
+    let coverage_anchor = ((0.75 * harmonic_coverage) + (0.25 * geometric_coverage)).clamp(0.0, 1.0);
+
+    let longest_tile_len = tiles.iter().map(|tile| tile.length).max().unwrap_or(0);
+    let tile_count = tiles.len();
+    let average_tile_len = matched_token_count as f64 / tile_count as f64;
+    let concentration_ratio = (longest_tile_len as f64 / matched_token_count as f64).clamp(0.0, 1.0);
+    let smaller_submission_len = left_len.min(right_len).max(1);
+    let longest_tile_ratio_of_smaller_submission =
+        (longest_tile_len as f64 / smaller_submission_len as f64).clamp(0.0, 1.0);
+    let longest_above_floor_ratio =
+        progress_above_floor(longest_tile_len as f64, gst_min_match_length as f64);
+    let average_tile_above_floor_ratio =
+        progress_above_floor(average_tile_len, gst_min_match_length as f64);
+
+    let contiguity_factor = (
+        0.9
+        + (0.05 * longest_tile_ratio_of_smaller_submission)
+        + (0.05 * longest_above_floor_ratio)
+    )
+        .clamp(0.0, 1.0);
+    let fragmentation_factor = (
+        0.85
+        + (0.10 * concentration_ratio.sqrt())
+        + (0.05 * average_tile_above_floor_ratio)
+    )
+        .clamp(0.0, 1.0);
+
+    let similarity_score = (coverage_anchor * contiguity_factor * fragmentation_factor).clamp(0.0, 1.0);
+
+    CodeSimilarityMetrics {
+        coverage_left,
+        coverage_right,
+        coverage_anchor,
+        longest_tile_len,
+        tile_count,
+        average_tile_len,
+        concentration_ratio,
+        longest_tile_ratio_of_smaller_submission,
+        contiguity_factor,
+        fragmentation_factor,
+        similarity_score,
+    }
+}
+
+fn progress_above_floor(value: f64, floor: f64) -> f64 {
+    if floor <= 0.0 || value <= floor {
+        return 0.0;
+    }
+
+    ((value - floor) / floor).clamp(0.0, 1.0)
 }
 
 fn compare_comments(
@@ -466,11 +579,12 @@ fn line_column(line_starts: &[usize], byte_offset: usize) -> (usize, usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::analyze;
+    use super::{analyze, compute_code_similarity_metrics, compute_code_similarity_score};
     use engine_contracts::{
         AnalysisLanguage, AnalysisPair, AnalysisParams, AnalysisRequest, AnalysisSubmission,
         SourceMapEntry, TemplateSource, SCHEMA_VERSION, SubmissionKind,
     };
+    use engine_gst::Tile;
 
     #[test]
     fn analyzes_java_pair_and_returns_byte_spans() {
@@ -844,5 +958,135 @@ mod tests {
         assert_eq!(comment_matches, 1);
         let score = pair.comment_score.expect("comment score should be present");
         assert!((score - (2.0 / 3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn few_long_matches_score_higher_than_many_short_matches() {
+        let few_long = compute_code_similarity_score(
+            &[
+                Tile {
+                    left_start: 0,
+                    right_start: 0,
+                    length: 16,
+                },
+                Tile {
+                    left_start: 30,
+                    right_start: 30,
+                    length: 8,
+                },
+            ],
+            24,
+            120,
+            120,
+            8,
+        );
+        let many_short = compute_code_similarity_score(
+            &[
+                Tile {
+                    left_start: 0,
+                    right_start: 0,
+                    length: 8,
+                },
+                Tile {
+                    left_start: 20,
+                    right_start: 20,
+                    length: 8,
+                },
+                Tile {
+                    left_start: 40,
+                    right_start: 40,
+                    length: 8,
+                },
+            ],
+            24,
+            120,
+            120,
+            8,
+        );
+
+        assert!(few_long > many_short);
+    }
+
+    #[test]
+    fn small_submission_with_real_contiguous_overlap_scores_meaningfully() {
+        let score = compute_code_similarity_score(
+            &[Tile {
+                left_start: 2,
+                right_start: 3,
+                length: 10,
+            }],
+            10,
+            20,
+            20,
+            8,
+        );
+
+        assert!(score > 0.4);
+    }
+
+    #[test]
+    fn large_submission_with_tiny_scattered_overlap_scores_low() {
+        let score = compute_code_similarity_score(
+            &[
+                Tile {
+                    left_start: 0,
+                    right_start: 0,
+                    length: 8,
+                },
+                Tile {
+                    left_start: 200,
+                    right_start: 250,
+                    length: 8,
+                },
+                Tile {
+                    left_start: 500,
+                    right_start: 600,
+                    length: 8,
+                },
+            ],
+            24,
+            1000,
+            1000,
+            8,
+        );
+
+        assert!(score < 0.03);
+    }
+
+    #[test]
+    fn asymmetric_pairs_use_both_sides_but_preserve_small_side_signal() {
+        let asymmetric_metrics = compute_code_similarity_metrics(
+            &[Tile {
+                left_start: 10,
+                right_start: 30,
+                length: 40,
+            }],
+            40,
+            80,
+            400,
+            8,
+        );
+        let symmetric_metrics = compute_code_similarity_metrics(
+            &[Tile {
+                left_start: 10,
+                right_start: 30,
+                length: 40,
+            }],
+            40,
+            400,
+            400,
+            8,
+        );
+
+        assert!((asymmetric_metrics.coverage_left - 0.5).abs() < 1e-9);
+        assert!((asymmetric_metrics.coverage_right - 0.1).abs() < 1e-9);
+        assert!(asymmetric_metrics.similarity_score > symmetric_metrics.similarity_score);
+        assert!(asymmetric_metrics.similarity_score < asymmetric_metrics.coverage_left);
+    }
+
+    #[test]
+    fn zero_matches_produce_zero_code_similarity() {
+        let score = compute_code_similarity_score(&[], 0, 120, 160, 8);
+        assert_eq!(score, 0.0);
     }
 }
