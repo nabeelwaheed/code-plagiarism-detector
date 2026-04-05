@@ -14,8 +14,10 @@ import {
   getAssignmentTemplateDetail,
   getUploadBatch,
   uploadProfessorArchive,
+  type SubmissionIdentityRevealResponse,
 } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
+import { SubmissionIdentityPanel } from "./submission-identity-panel";
 
 type SelectedArtifact =
   | { type: "submission"; id: string }
@@ -34,12 +36,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     "current-current" | "current-historical"
   >("current-current");
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
-  const [revealedIdentity, setRevealedIdentity] = useState<{
-    studentName: string;
-    studentNumber: string | null;
-    studentEmail: string | null;
-    assignmentKey: string | null;
-  } | null>(null);
+  const [revealedIdentity, setRevealedIdentity] = useState<SubmissionIdentityRevealResponse | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -149,6 +146,11 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     setRevealedIdentity(null);
     revealIdentityMutation.reset();
   }, [selectedArtifact?.id, selectedArtifact?.type]);
+
+  const handleHideIdentity = () => {
+    setRevealedIdentity(null);
+    revealIdentityMutation.reset();
+  };
 
   const handleHistoricalSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -652,40 +654,19 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                       <span className="meta-dot" />
                       <span>{formatDateTime(artifactDetailQuery.data.createdAt)}</span>
                     </div>
-                    {artifactDetailQuery.data.kind !== "template"
-                    && artifactDetailQuery.data.identityRevealMode ? (
-                      <div className="stack-sm">
-                        <div className="toolbar-row">
-                          <button
-                            className="secondary-button"
-                            disabled={revealIdentityMutation.isPending}
-                            onClick={() => revealIdentityMutation.mutate(artifactDetailQuery.data!.id)}
-                            type="button"
-                          >
-                            {revealIdentityMutation.isPending ? "Revealing..." : "Reveal identity"}
-                          </button>
-                        </div>
-                        {revealIdentityMutation.error ? (
-                          <p className="error-text">{revealIdentityMutation.error.message}</p>
-                        ) : null}
-                        {revealedIdentity ? (
-                          <div className="surface-muted stack-sm">
-                            <strong>Revealed identity</strong>
-                            <p>Name: {revealedIdentity.studentName}</p>
-                            <p>Student number: {revealedIdentity.studentNumber ?? "Not provided"}</p>
-                            <p>Email: {revealedIdentity.studentEmail ?? "Not provided"}</p>
-                            {revealedIdentity.assignmentKey ? (
-                              <p>Assignment keyID: {revealedIdentity.assignmentKey}</p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <p className="muted-text">
-                            {artifactDetailQuery.data.identityRevealMode === "encrypted"
-                              ? "This submission stores an encrypted identity that can be revealed only in the professor workflow."
-                              : "This bulk testing submission reveals the sanitized child zip filename stem as the student name."}
-                          </p>
-                        )}
-                      </div>
+                    {artifactDetailQuery.data.kind !== "template" ? (
+                      <SubmissionIdentityPanel
+                        identityRevealMode={artifactDetailQuery.data.identityRevealMode}
+                        isRevealPending={revealIdentityMutation.isPending}
+                        onHide={handleHideIdentity}
+                        onReveal={
+                          artifactDetailQuery.data.identityRevealMode
+                            ? () => revealIdentityMutation.mutate(artifactDetailQuery.data!.id)
+                            : null
+                        }
+                        revealError={revealIdentityMutation.error?.message ?? null}
+                        revealedIdentity={revealedIdentity}
+                      />
                     ) : null}
                   </div>
                   <span className={`status-badge ${artifactDetailQuery.data.kind === "template" ? "is-active" : ""}`}>

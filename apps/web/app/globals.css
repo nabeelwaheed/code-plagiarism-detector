@@ -802,6 +802,12 @@ input[type="file"]::file-selector-button {
   gap: 18px;
 }
 
+.pair-identity-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .pair-review-metrics {
   display: grid;
   gap: 12px;
@@ -960,6 +966,10 @@ input[type="file"]::file-selector-button {
   }
 
   .evidence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pair-identity-grid {
     grid-template-columns: 1fr;
   }
 

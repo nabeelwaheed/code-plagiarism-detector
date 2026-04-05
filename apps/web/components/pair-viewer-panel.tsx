@@ -1,16 +1,63 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { EvidenceViewer } from "./evidence-viewer";
-import { getPairResult } from "../lib/api";
+import {
+  getPairResult,
+  revealAssignmentSubmissionIdentity,
+  type SubmissionIdentityRevealResponse,
+} from "../lib/api";
+import { SubmissionIdentityPanel } from "./submission-identity-panel";
 
 export function PairViewerPanel({ pairId }: { pairId: string }) {
+  const [leftRevealedIdentity, setLeftRevealedIdentity] =
+    useState<SubmissionIdentityRevealResponse | null>(null);
+  const [rightRevealedIdentity, setRightRevealedIdentity] =
+    useState<SubmissionIdentityRevealResponse | null>(null);
   const pairQuery = useQuery({
     queryKey: ["pair-result", pairId],
     queryFn: () => getPairResult(pairId),
     refetchInterval: 4000,
   });
+  const assignmentId = pairQuery.data?.assignment.id ?? "";
+
+  const revealLeftIdentityMutation = useMutation({
+    mutationFn: (submissionId: string) => {
+      if (!assignmentId) {
+        throw new Error("That assignment is not available.");
+      }
+
+      return revealAssignmentSubmissionIdentity(assignmentId, submissionId);
+    },
+    onSuccess: (identity) => {
+      setLeftRevealedIdentity(identity);
+    },
+  });
+
+  const revealRightIdentityMutation = useMutation({
+    mutationFn: (submissionId: string) => {
+      if (!assignmentId) {
+        throw new Error("That assignment is not available.");
+      }
+
+      return revealAssignmentSubmissionIdentity(assignmentId, submissionId);
+    },
+    onSuccess: (identity) => {
+      setRightRevealedIdentity(identity);
+    },
+  });
+
+  useEffect(() => {
+    setLeftRevealedIdentity(null);
+    setRightRevealedIdentity(null);
+    revealLeftIdentityMutation.reset();
+    revealRightIdentityMutation.reset();
+  }, [
+    pairQuery.data?.leftSubmission.id,
+    pairQuery.data?.rightSubmission.id,
+  ]);
 
   if (pairQuery.isLoading) {
     return <p className="panel">Loading pair evidence...</p>;
@@ -61,6 +108,54 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
             <div className="metric-card">
               <span>Comment similarity</span>
               <strong>{formatSimilarityPercent(pair.commentScore)}</strong>
+            </div>
+          </div>
+
+          <div className="pair-identity-grid">
+            <div className="surface-muted stack-sm">
+              <div className="stack-sm">
+                <strong>{pair.leftSubmission.displayName}</strong>
+                <span className="pair-note">Left submission identity</span>
+              </div>
+              <SubmissionIdentityPanel
+                identityRevealMode={pair.leftSubmission.identityRevealMode}
+                isRevealPending={revealLeftIdentityMutation.isPending}
+                onHide={() => {
+                  setLeftRevealedIdentity(null);
+                  revealLeftIdentityMutation.reset();
+                }}
+                onReveal={
+                  pair.leftSubmission.identityRevealMode
+                    ? () => revealLeftIdentityMutation.mutate(pair.leftSubmission.id)
+                    : null
+                }
+                revealError={revealLeftIdentityMutation.error?.message ?? null}
+                revealedIdentity={leftRevealedIdentity}
+                showUnavailableMessage
+              />
+            </div>
+
+            <div className="surface-muted stack-sm">
+              <div className="stack-sm">
+                <strong>{pair.rightSubmission.displayName}</strong>
+                <span className="pair-note">Right submission identity</span>
+              </div>
+              <SubmissionIdentityPanel
+                identityRevealMode={pair.rightSubmission.identityRevealMode}
+                isRevealPending={revealRightIdentityMutation.isPending}
+                onHide={() => {
+                  setRightRevealedIdentity(null);
+                  revealRightIdentityMutation.reset();
+                }}
+                onReveal={
+                  pair.rightSubmission.identityRevealMode
+                    ? () => revealRightIdentityMutation.mutate(pair.rightSubmission.id)
+                    : null
+                }
+                revealError={revealRightIdentityMutation.error?.message ?? null}
+                revealedIdentity={rightRevealedIdentity}
+                showUnavailableMessage
+              />
             </div>
           </div>
 

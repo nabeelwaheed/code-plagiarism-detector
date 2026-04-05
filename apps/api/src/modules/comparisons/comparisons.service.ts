@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { UploadPurpose } from "@prisma/client";
 import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -237,6 +238,13 @@ export class ComparisonsService {
         },
         leftSubmission: {
           include: {
+            uploadBatch: {
+              select: {
+                encryptedIdentity: true,
+                purpose: true,
+                uploaderId: true,
+              },
+            },
             files: {
               orderBy: { canonicalOrder: "asc" },
             },
@@ -244,6 +252,13 @@ export class ComparisonsService {
         },
         rightSubmission: {
           include: {
+            uploadBatch: {
+              select: {
+                encryptedIdentity: true,
+                purpose: true,
+                uploaderId: true,
+              },
+            },
             files: {
               orderBy: { canonicalOrder: "asc" },
             },
@@ -276,6 +291,7 @@ export class ComparisonsService {
         id: pairResult.leftSubmission.id,
         displayName: pairResult.leftSubmission.displayName,
         kind: pairResult.leftSubmission.kind.toLowerCase(),
+        identityRevealMode: getSubmissionIdentityRevealMode(pairResult.leftSubmission.uploadBatch),
         concatenatedSource: pairResult.leftSubmission.concatenatedSource,
         sourceMap: pairResult.leftSubmission.sourceMapJson,
         files: pairResult.leftSubmission.files.map((file) => ({
@@ -291,6 +307,7 @@ export class ComparisonsService {
         id: pairResult.rightSubmission.id,
         displayName: pairResult.rightSubmission.displayName,
         kind: pairResult.rightSubmission.kind.toLowerCase(),
+        identityRevealMode: getSubmissionIdentityRevealMode(pairResult.rightSubmission.uploadBatch),
         concatenatedSource: pairResult.rightSubmission.concatenatedSource,
         sourceMap: pairResult.rightSubmission.sourceMapJson,
         files: pairResult.rightSubmission.files.map((file) => ({
@@ -350,4 +367,35 @@ export class ComparisonsService {
       })),
     };
   }
+}
+
+function getSubmissionIdentityRevealMode(input: {
+  encryptedIdentity: string | null;
+  purpose: UploadPurpose;
+  uploaderId: string | null;
+}) {
+  if (input.encryptedIdentity) {
+    return "encrypted" as const;
+  }
+
+  if (isBulkPublicUploadBatch(input)) {
+    return "display_name" as const;
+  }
+
+  return null;
+}
+
+function isPublicAnonymousStudentUploadBatch(input: {
+  purpose: UploadPurpose;
+  uploaderId: string | null;
+}) {
+  return input.purpose === UploadPurpose.STUDENT_SUBMISSION && input.uploaderId === null;
+}
+
+function isBulkPublicUploadBatch(input: {
+  encryptedIdentity: string | null;
+  purpose: UploadPurpose;
+  uploaderId: string | null;
+}) {
+  return isPublicAnonymousStudentUploadBatch(input) && input.encryptedIdentity === null;
 }

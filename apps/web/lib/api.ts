@@ -158,6 +158,7 @@ export interface PairDetailResponse {
     id: string;
     displayName: string;
     kind: "current" | "historical";
+    identityRevealMode?: "encrypted" | "display_name" | null;
     concatenatedSource: string;
     sourceMap: Array<{
       filePath: string;
