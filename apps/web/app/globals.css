@@ -873,9 +873,18 @@ input[type="file"]::file-selector-button {
   gap: 14px;
 }
 
+.legend-groups-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
 .legend-group {
   display: grid;
   gap: 10px;
+  align-content: start;
+  min-width: 0;
 }
 
 .legend-group-head {
@@ -943,6 +952,10 @@ input[type="file"]::file-selector-button {
   }
 
   .evidence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .legend-groups-layout {
     grid-template-columns: 1fr;
   }
 }

@@ -194,21 +194,21 @@ export function EvidenceViewer({
           const color = colors.get(match.matchId) ?? "#2563eb";
           return `
             .match-inline-${match.matchId} {
-              background: ${hexToTransparentFill(color, 0.14)};
-              border-bottom: 1px solid ${hexToTransparentFill(color, 0.8)};
+              background: ${hexToTransparentFill(color, 0.05)};
+              border-bottom: 1px solid ${hexToTransparentFill(color, 0.35)};
             }
             .match-inline-active-${match.matchId} {
-              background: ${hexToTransparentFill(color, 0.32)};
+              background: ${hexToTransparentFill(color, 0.34)};
               border-bottom: 2px solid ${color};
               border-radius: 2px;
             }
             .match-outline-${match.matchId} {
-              border: 1px solid ${hexToTransparentFill(color, 0.85)};
+              border: 1px solid ${hexToTransparentFill(color, 0.18)};
             }
             .match-outline-active-${match.matchId} {
               border: 1px solid ${color};
               box-shadow: inset 0 0 0 1px ${color};
-              background: ${hexToTransparentFill(color, 0.08)};
+              background: ${hexToTransparentFill(color, 0.1)};
             }
           `;
         })
@@ -280,24 +280,26 @@ export function EvidenceViewer({
           <strong>Matches</strong>
           <span className="pair-note">Select a match to scroll both panes and highlight the paired regions.</span>
         </div>
-        {codeMatches.length > 0 ? (
-          <LegendGroup
-            activeMatchId={activeMatchId}
-            colors={colors}
-            matches={codeMatches}
-            onSelectMatch={revealMatch}
-            title="Code matches"
-          />
-        ) : null}
-        {commentMatches.length > 0 ? (
-          <LegendGroup
-            activeMatchId={activeMatchId}
-            colors={colors}
-            matches={commentMatches}
-            onSelectMatch={revealMatch}
-            title="Comment matches"
-          />
-        ) : null}
+        <div className="legend-groups-layout">
+          {commentMatches.length > 0 ? (
+            <LegendGroup
+              activeMatchId={activeMatchId}
+              colors={colors}
+              matches={commentMatches}
+              onSelectMatch={revealMatch}
+              title="Comment matches"
+            />
+          ) : null}
+          {codeMatches.length > 0 ? (
+            <LegendGroup
+              activeMatchId={activeMatchId}
+              colors={colors}
+              matches={codeMatches}
+              onSelectMatch={revealMatch}
+              title="Code matches"
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );
