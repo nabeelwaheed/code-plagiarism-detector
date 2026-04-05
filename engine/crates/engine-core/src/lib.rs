@@ -4,7 +4,7 @@ use engine_contracts::{
 };
 use engine_gst::{run_gst, symmetric_coverage_score, Tile};
 use engine_language::{parse_submission, CommentToken, ParsedSubmission};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
     validate_request(&request)?;
@@ -51,8 +51,13 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
         );
 
         let mut matches = map_code_matches(left, right, &gst_result.tiles);
-        let (comment_matches, comment_score) =
-            compare_comments(left, right, params.minimum_comment_length, matches.len());
+        let (comment_matches, comment_score) = compare_comments(
+            left,
+            right,
+            processed_template.as_ref(),
+            params.minimum_comment_length,
+            matches.len(),
+        );
         matches.extend(comment_matches);
 
         let similarity_score = symmetric_coverage_score(
@@ -232,51 +237,130 @@ fn map_code_matches(left: &ParsedSubmission, right: &ParsedSubmission, tiles: &[
 fn compare_comments(
     left: &ParsedSubmission,
     right: &ParsedSubmission,
+    template: Option<&ParsedSubmission>,
     minimum_comment_length: usize,
     starting_index: usize,
 ) -> (Vec<PairMatch>, Option<f64>) {
+    let template_counts = template_comment_counts(
+        template.map(|parsed| parsed.comment_tokens.as_slice()),
+        minimum_comment_length,
+    );
+    let left_comments = prepared_comments(left, minimum_comment_length, &template_counts);
+    let right_comments = prepared_comments(right, minimum_comment_length, &template_counts);
+    let left_comment_count = left_comments.len();
+    let right_comment_count = right_comments.len();
+
+    let mut left_by_text: BTreeMap<String, Vec<OwnedPreparedComment<'_>>> = BTreeMap::new();
+    for comment in left_comments {
+        left_by_text
+            .entry(comment.normalized_text.clone())
+            .or_default()
+            .push(comment);
+    }
+
+    let mut right_by_text: BTreeMap<String, Vec<OwnedPreparedComment<'_>>> = BTreeMap::new();
+    for comment in right_comments {
+        right_by_text
+            .entry(comment.normalized_text.clone())
+            .or_default()
+            .push(comment);
+    }
+
     let mut matches = Vec::new();
-    let mut matched_count = 0usize;
-
-    for (left_index, left_comment) in left.comment_tokens.iter().enumerate() {
-        let normalized_left = normalize_comment(&left_comment.text);
-        if normalized_left.len() < minimum_comment_length {
+    for (normalized_text, left_group) in left_by_text {
+        let Some(right_group) = right_by_text.get(&normalized_text) else {
             continue;
-        }
+        };
 
-        for (right_index, right_comment) in right.comment_tokens.iter().enumerate() {
-            let normalized_right = normalize_comment(&right_comment.text);
-            if normalized_right.len() < minimum_comment_length || normalized_left != normalized_right {
-                continue;
-            }
-
+        for (left_comment, right_comment) in left_group.iter().zip(right_group.iter()) {
             let match_index = starting_index + matches.len();
             matches.push(comment_match(
                 match_index,
-                left_index,
-                right_index,
-                left_comment,
-                right_comment,
+                left_comment.original_index,
+                right_comment.original_index,
+                left_comment.comment,
+                right_comment.comment,
                 &left.line_starts,
                 &left.source_map,
                 &right.line_starts,
                 &right.source_map,
             ));
-            matched_count += 1;
         }
     }
 
-    let score = if left.comment_tokens.is_empty() && right.comment_tokens.is_empty() {
+    let matched_count = matches.len();
+
+    let score = if left_comment_count == 0 && right_comment_count == 0 {
         None
     } else {
         Some(symmetric_coverage_score(
             matched_count,
-            left.comment_tokens.len(),
-            right.comment_tokens.len(),
+            left_comment_count,
+            right_comment_count,
         ))
     };
 
     (matches, score)
+}
+
+fn template_comment_counts(
+    template_comments: Option<&[CommentToken]>,
+    minimum_comment_length: usize,
+) -> HashMap<String, usize> {
+    let mut counts = HashMap::new();
+
+    let Some(template_comments) = template_comments else {
+        return counts;
+    };
+
+    for comment in template_comments {
+        let normalized = normalize_comment(&comment.text);
+        if normalized.len() < minimum_comment_length {
+            continue;
+        }
+
+        *counts.entry(normalized).or_insert(0) += 1;
+    }
+
+    counts
+}
+
+fn prepared_comments<'a>(
+    submission: &'a ParsedSubmission,
+    minimum_comment_length: usize,
+    template_counts: &HashMap<String, usize>,
+) -> Vec<OwnedPreparedComment<'a>> {
+    let mut remaining_template_counts = template_counts.clone();
+    let mut prepared = Vec::new();
+
+    for (index, comment) in submission.comment_tokens.iter().enumerate() {
+        let normalized_text = normalize_comment(&comment.text);
+        if normalized_text.len() < minimum_comment_length {
+            continue;
+        }
+
+        if let Some(remaining) = remaining_template_counts.get_mut(&normalized_text) {
+            if *remaining > 0 {
+                *remaining -= 1;
+                continue;
+            }
+        }
+
+        prepared.push(OwnedPreparedComment {
+            original_index: index,
+            comment,
+            normalized_text,
+        });
+    }
+
+    prepared
+}
+
+#[derive(Clone)]
+struct OwnedPreparedComment<'a> {
+    original_index: usize,
+    comment: &'a CommentToken,
+    normalized_text: String,
 }
 
 fn comment_match(
@@ -315,11 +399,21 @@ fn comment_match(
 
 fn normalize_comment(comment: &str) -> String {
     comment
+        .chars()
+        .flat_map(char::to_lowercase)
+        .map(|character| {
+            if character.is_alphanumeric() || character.is_whitespace() {
+                character
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
         .trim()
-        .to_ascii_lowercase()
+        .to_string()
 }
 
 fn build_match_span(
@@ -533,5 +627,222 @@ mod tests {
         assert!(!pair.matches.is_empty());
         assert_eq!(pair.matches[0].left.file_path.as_deref(), Some("main.c"));
         assert_eq!(pair.matches[0].right.file_path.as_deref(), Some("main.c"));
+    }
+
+    #[test]
+    fn java_package_and_import_boilerplate_are_excluded() {
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "package left.example;\nimport java.util.List;\n".to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "package right.example;\nimport java.util.List;\n".to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        assert_eq!(pair.similarity_score, 0.0);
+        assert!(pair.matches.is_empty());
+    }
+
+    #[test]
+    fn c_preprocessor_boilerplate_is_excluded() {
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::C,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "#include <stdio.h>\n".to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "#include <stdio.h>\n".to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 1,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        assert_eq!(pair.similarity_score, 0.0);
+        assert!(pair.matches.is_empty());
+    }
+
+    #[test]
+    fn template_comments_are_removed_from_comment_matches() {
+        let template_comment = "// starter comment!\n";
+        let copied_comment = "// distinctive copied clue!!!\n";
+        let left_source = format!("{template_comment}{copied_comment}class A {{}}\n");
+        let right_source = format!("{template_comment}{copied_comment}class B {{}}\n");
+        let template_source = format!("{template_comment}class Template {{}}\n");
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: left_source,
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: right_source,
+                    source_map: vec![],
+                },
+            ],
+            template: Some(TemplateSource {
+                source: template_source,
+                source_map: vec![],
+            }),
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        let comment_matches = pair
+            .matches
+            .iter()
+            .filter(|matched| matched.kind == engine_contracts::MatchKind::Comment)
+            .count();
+
+        assert_eq!(comment_matches, 1);
+        assert_eq!(pair.comment_score, Some(1.0));
+    }
+
+    #[test]
+    fn comment_normalization_ignores_punctuation_and_case() {
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "// Hello, WORLD!!!\nclass A {}\n".to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "/* hello world */\nclass B {}\n".to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        let comment_matches = pair
+            .matches
+            .iter()
+            .filter(|matched| matched.kind == engine_contracts::MatchKind::Comment)
+            .count();
+
+        assert_eq!(comment_matches, 1);
+        assert_eq!(pair.comment_score, Some(1.0));
+    }
+
+    #[test]
+    fn repeated_identical_comments_do_not_cross_multiply() {
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "// repeat this clue\n// repeat this clue\nclass A {}\n".to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: "/* repeat this clue */\nclass B {}\n".to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        let comment_matches = pair
+            .matches
+            .iter()
+            .filter(|matched| matched.kind == engine_contracts::MatchKind::Comment)
+            .count();
+
+        assert_eq!(comment_matches, 1);
+        let score = pair.comment_score.expect("comment score should be present");
+        assert!((score - (2.0 / 3.0)).abs() < 1e-9);
     }
 }

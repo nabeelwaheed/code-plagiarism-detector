@@ -43,6 +43,7 @@ pub fn parse_submission(
 trait LanguageAdapter {
     fn build_tree(&self, source: &str) -> Result<Tree, String>;
     fn is_comment_kind(&self, node_kind: &str) -> bool;
+    fn should_skip_subtree(&self, node_kind: &str) -> bool;
     fn should_skip_leaf(&self, node_kind: &str, raw_text: &str) -> bool;
     fn normalize_code_token(
         &self,
@@ -97,6 +98,11 @@ fn collect_tokens(
     code_tokens: &mut Vec<CodeToken>,
     comment_tokens: &mut Vec<CommentToken>,
 ) {
+    let node_kind = node.kind();
+    if adapter.should_skip_subtree(node_kind) {
+        return;
+    }
+
     if node.child_count() == 0 {
         let start = node.start_byte();
         let end = node.end_byte();
@@ -106,7 +112,6 @@ fn collect_tokens(
         }
 
         let raw_text = &source[start..end];
-        let node_kind = node.kind();
 
         if adapter.should_skip_leaf(node_kind, raw_text) {
             return;
@@ -180,6 +185,10 @@ impl LanguageAdapter for JavaAdapter {
         matches!(node_kind, "line_comment" | "block_comment")
     }
 
+    fn should_skip_subtree(&self, node_kind: &str) -> bool {
+        matches!(node_kind, "package_declaration" | "import_declaration")
+    }
+
     fn should_skip_leaf(&self, _node_kind: &str, raw_text: &str) -> bool {
         raw_text.trim().is_empty()
     }
@@ -241,6 +250,10 @@ impl LanguageAdapter for CAdapter {
         node_kind.contains("comment")
     }
 
+    fn should_skip_subtree(&self, node_kind: &str) -> bool {
+        node_kind.starts_with("preproc_")
+    }
+
     fn should_skip_leaf(&self, node_kind: &str, raw_text: &str) -> bool {
         raw_text.trim().is_empty() || node_kind.starts_with("preproc_")
     }
@@ -270,6 +283,10 @@ impl LanguageAdapter for CppAdapter {
 
     fn is_comment_kind(&self, node_kind: &str) -> bool {
         node_kind.contains("comment")
+    }
+
+    fn should_skip_subtree(&self, node_kind: &str) -> bool {
+        node_kind.starts_with("preproc_")
     }
 
     fn should_skip_leaf(&self, node_kind: &str, raw_text: &str) -> bool {
