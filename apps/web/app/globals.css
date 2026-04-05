@@ -887,6 +887,14 @@ input[type="file"]::file-selector-button {
   min-width: 0;
 }
 
+.legend-group-left {
+  grid-column: 1;
+}
+
+.legend-group-right {
+  grid-column: 2;
+}
+
 .legend-group-head {
   display: flex;
   gap: 8px;
@@ -957,6 +965,11 @@ input[type="file"]::file-selector-button {
 
   .legend-groups-layout {
     grid-template-columns: 1fr;
+  }
+
+  .legend-group-left,
+  .legend-group-right {
+    grid-column: auto;
   }
 }
 

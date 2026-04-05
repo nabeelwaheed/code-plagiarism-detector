@@ -287,6 +287,7 @@ export function EvidenceViewer({
               colors={colors}
               matches={commentMatches}
               onSelectMatch={revealMatch}
+              position="left"
               title="Comment matches"
             />
           ) : null}
@@ -296,6 +297,7 @@ export function EvidenceViewer({
               colors={colors}
               matches={codeMatches}
               onSelectMatch={revealMatch}
+              position="right"
               title="Code matches"
             />
           ) : null}
@@ -310,16 +312,18 @@ function LegendGroup({
   colors,
   matches,
   onSelectMatch,
+  position,
   title,
 }: {
   activeMatchId: string | null;
   colors: Map<string, string>;
   matches: ViewerMatch[];
   onSelectMatch: (matchId: string) => void;
+  position: "left" | "right";
   title: string;
 }) {
   return (
-    <section className="legend-group">
+    <section className={`legend-group legend-group-${position}`}>
       <div className="legend-group-head">
         <strong>{title}</strong>
         <span className="pair-note">{matches.length} {matches.length === 1 ? "match" : "matches"}</span>
