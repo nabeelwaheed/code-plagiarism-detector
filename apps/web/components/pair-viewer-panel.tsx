@@ -47,8 +47,8 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
         <div className="pair-review-layout">
           <div className="pair-review-metrics">
             <div className="metric-card">
-              <span>Similarity</span>
-              <strong>{pair.similarityScore.toFixed(3)}</strong>
+              <span>Code similarity</span>
+              <strong>{formatSimilarityPercent(pair.similarityScore)}</strong>
             </div>
             <div className="metric-card">
               <span>Matched regions</span>
@@ -59,18 +59,16 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
               <strong>{pair.matchedTokenCount}</strong>
             </div>
             <div className="metric-card">
-              <span>Comment score</span>
-              <strong>
-                {pair.commentScore === null ? "N/A" : pair.commentScore.toFixed(3)}
-              </strong>
+              <span>Comment similarity</span>
+              <strong>{formatSimilarityPercent(pair.commentScore)}</strong>
             </div>
           </div>
 
           <div className="surface-muted stack-sm">
             <strong>How to review</strong>
             <p className="pair-note">
-              Click a highlighted match in either editor, or use the match chips below, to jump to the
-              same region on both sides.
+              Click a highlighted match in either editor, or use the code and comment match buttons
+              below, to jump to and highlight the same region on both sides.
             </p>
           </div>
 
@@ -88,4 +86,12 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
       </section>
     </div>
   );
+}
+
+function formatSimilarityPercent(value: number | null) {
+  if (value === null) {
+    return "N/A";
+  }
+
+  return `${(value * 100).toFixed(1)}%`;
 }

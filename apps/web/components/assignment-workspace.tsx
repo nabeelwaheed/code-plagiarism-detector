@@ -209,8 +209,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
           <p className="eyebrow">Assignment workspace</p>
           <h1>{assignment.title}</h1>
           <p className="subtle-text">
-            Manage uploads, browse files, and review suspicious pairs for this {" "}
-            {assignment.language.toUpperCase()} assignment.
+            Review uploads, files, and suspicious pairs for this {assignment.language.toUpperCase()} assignment.
           </p>
           <div className="toolbar-row">
             <span className="status-badge is-active">{assignment.language.toUpperCase()}</span>
@@ -219,6 +218,11 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
         </div>
 
         <div className="section-stack">
+          <div className="toolbar-row">
+            <Link className="secondary-button as-link" href="/professor">
+              Back to professor home
+            </Link>
+          </div>
           <div className="surface-muted stack-sm">
             <span className="muted-text">Comparison</span>
             <div className="meta-line">
@@ -244,6 +248,43 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
             </button>
           </div>
 
+          <div className="workspace-controls">
+            <div className="segmented-control" role="tablist" aria-label="Workspace view">
+              <button
+                className={`segmented-option ${activeWorkspaceView === "submissions" ? "is-active" : ""}`}
+                onClick={() => setActiveWorkspaceView("submissions")}
+                type="button"
+              >
+                Submissions
+              </button>
+              <button
+                className={`segmented-option ${activeWorkspaceView === "pairs" ? "is-active" : ""}`}
+                onClick={() => setActiveWorkspaceView("pairs")}
+                type="button"
+              >
+                Suspicious pairs
+              </button>
+            </div>
+            {activeWorkspaceView === "pairs" ? (
+              <div className="segmented-control" role="tablist" aria-label="Pair category">
+                <button
+                  className={`segmented-option ${activePairCategory === "current-current" ? "is-active" : ""}`}
+                  onClick={() => setActivePairCategory("current-current")}
+                  type="button"
+                >
+                  Current vs current
+                </button>
+                <button
+                  className={`segmented-option ${activePairCategory === "current-historical" ? "is-active" : ""}`}
+                  onClick={() => setActivePairCategory("current-historical")}
+                  type="button"
+                >
+                  Current vs historical
+                </button>
+              </div>
+            ) : null}
+          </div>
+
           {rerunMutation.error ? (
             <div className="alert alert-error">
               <p>{rerunMutation.error.message}</p>
@@ -264,7 +305,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
             </p>
           </div>
 
-          <form className="form-stack" onSubmit={handleHistoricalSubmit}>
+          <form className="form-stack form-compact" onSubmit={handleHistoricalSubmit}>
             <label className="field">
               <span>Zip archive</span>
               <input
@@ -273,11 +314,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 onChange={(event) => setHistoricalFile(event.target.files?.[0] ?? null)}
               />
             </label>
-            {historicalFile ? (
-              <p className="muted-text">Selected: {historicalFile.name}</p>
-            ) : (
-              <p className="muted-text">Choose a single zip file.</p>
-            )}
+            {historicalFile ? <p className="muted-text">Selected: {historicalFile.name}</p> : null}
             <button
               className="primary-button"
               disabled={!historicalFile || historicalUploadMutation.isPending}
@@ -299,7 +336,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
             </p>
           </div>
 
-          <form className="form-stack" onSubmit={handleTemplateSubmit}>
+          <form className="form-stack form-compact" onSubmit={handleTemplateSubmit}>
             <label className="field">
               <span>Zip archive</span>
               <input
@@ -308,11 +345,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 onChange={(event) => setTemplateFile(event.target.files?.[0] ?? null)}
               />
             </label>
-            {templateFile ? (
-              <p className="muted-text">Selected: {templateFile.name}</p>
-            ) : (
-              <p className="muted-text">Choose a single zip file.</p>
-            )}
+            {templateFile ? <p className="muted-text">Selected: {templateFile.name}</p> : null}
             <button
               className="primary-button"
               disabled={!templateFile || templateUploadMutation.isPending}
@@ -330,14 +363,15 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
             <div>
               <p className="eyebrow">Latest upload</p>
               <h2>{formatUploadPurpose(latestUpload.purpose)}</h2>
-              <p className="subtle-text">
-                {getUploadSummary(latestUpload.status, latestUpload.errorMessage)}
-              </p>
             </div>
             <span className={`status-badge ${getStatusClassName(latestUpload.status)}`}>
               {formatStatusLabel(latestUpload.status)}
             </span>
           </div>
+
+          <p className="subtle-text">
+            {getUploadSummary(latestUpload.status, latestUpload.errorMessage)}
+          </p>
 
           {latestUpload.errorMessage ? (
             <div className="history-details">
@@ -354,48 +388,18 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
         </section>
       ) : null}
 
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <h2>Workspace</h2>
-            <p className="subtle-text">Switch between files and suspicious pairs.</p>
-          </div>
-          <div className="segmented-control" role="tablist" aria-label="Workspace view">
-            <button
-              className={`segmented-option ${activeWorkspaceView === "submissions" ? "is-active" : ""}`}
-              onClick={() => setActiveWorkspaceView("submissions")}
-              type="button"
-            >
-              Submissions
-            </button>
-            <button
-              className={`segmented-option ${activeWorkspaceView === "pairs" ? "is-active" : ""}`}
-              onClick={() => setActiveWorkspaceView("pairs")}
-              type="button"
-            >
-              Suspicious pairs
-            </button>
-          </div>
-        </div>
-      </section>
-
       {activeWorkspaceView === "submissions" ? (
         <>
           <section className="panel">
             <div className="section-heading">
-              <div>
-                <h2>Files</h2>
-                <p className="subtle-text">
-                  Current submissions, historical submissions, and template code for this assignment.
-                </p>
-              </div>
+              <h2>Files</h2>
               <button
                 className="secondary-button"
-                disabled={downloadMutation.isPending || assignment.submissions.length === 0}
+                disabled={downloadMutation.isPending || currentSubmissions.length === 0}
                 onClick={() => downloadMutation.mutate({ type: "all" })}
                 type="button"
               >
-                {downloadMutation.isPending ? "Preparing..." : "Download all submissions"}
+                {downloadMutation.isPending ? "Preparing..." : "Download current submissions"}
               </button>
             </div>
 
@@ -424,10 +428,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
           <div className="split-grid">
             <section className="panel">
               <div className="section-heading">
-                <div>
-                  <h2>Current</h2>
-                  <p className="subtle-text">Student submissions uploaded for this assignment.</p>
-                </div>
+                <h2>Current</h2>
                 <span className="status-badge">{currentSubmissions.length}</span>
               </div>
               {currentSubmissions.length > 0 ? (
@@ -482,10 +483,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
             <section className="panel">
               <div className="section-heading">
-                <div>
-                  <h2>Historical</h2>
-                  <p className="subtle-text">Past submissions used for current-to-historical review.</p>
-                </div>
+                <h2>Historical</h2>
                 <span className="status-badge">{historicalSubmissions.length}</span>
               </div>
               {historicalSubmissions.length > 0 ? (
@@ -540,10 +538,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
             <section className="panel">
               <div className="section-heading">
-                <div>
-                  <h2>Template</h2>
-                  <p className="subtle-text">Starter code and provided files kept out of pair scoring.</p>
-                </div>
+                <h2>Template</h2>
                 <span className={`status-badge ${assignment.activeTemplate ? "is-active" : ""}`}>
                   {assignment.activeTemplate ? "Active" : "Missing"}
                 </span>
@@ -606,10 +601,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
           <section className="panel">
             <div className="section-heading">
-              <div>
-                <h2>Viewer</h2>
-                <p className="subtle-text">Open a submission or template to inspect files and source content.</p>
-              </div>
+              <h2>Viewer</h2>
               {artifactDetailQuery.data ? (
                 <button
                   className="secondary-button"
@@ -747,10 +739,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
           <section className="panel">
             <div className="section-heading">
-              <div>
-                <h2>Recent uploads</h2>
-                <p className="subtle-text">Recent upload batches and status updates for this assignment.</p>
-              </div>
+              <h2>Recent uploads</h2>
             </div>
             {assignment.uploadBatches.length > 0 ? (
               <div className="history-list">
@@ -799,26 +788,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       ) : (
         <section className="panel">
           <div className="section-heading">
-            <div>
-              <h2>Suspicious pairs</h2>
-              <p className="subtle-text">Review the latest eligible comparison results for this assignment.</p>
-            </div>
-            <div className="segmented-control" role="tablist" aria-label="Pair category">
-              <button
-                className={`segmented-option ${activePairCategory === "current-current" ? "is-active" : ""}`}
-                onClick={() => setActivePairCategory("current-current")}
-                type="button"
-              >
-                Current vs current
-              </button>
-              <button
-                className={`segmented-option ${activePairCategory === "current-historical" ? "is-active" : ""}`}
-                onClick={() => setActivePairCategory("current-historical")}
-                type="button"
-              >
-                Current vs historical
-              </button>
-            </div>
+            <h2>Suspicious pairs</h2>
           </div>
 
           {latestVisibleRun ? (
@@ -854,7 +824,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   <div className="pair-table-head">
                     <span>Left</span>
                     <span>Right</span>
-                    <span>Similarity</span>
+                    <span>Scores</span>
                     <span>Matches</span>
                     <span>Viewer</span>
                   </div>
@@ -868,7 +838,14 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                         <strong>{pair.rightSubmission.displayName}</strong>
                         <span className="pair-note">{capitalizeLabel(pair.rightSubmission.kind)}</span>
                       </div>
-                      <span className="pair-value">{pair.similarityScore.toFixed(3)}</span>
+                      <div className="pair-score-stack">
+                        <span className="pair-score-line">
+                          <strong>Code</strong> {formatSimilarityPercent(pair.similarityScore)}
+                        </span>
+                        <span className="pair-score-line">
+                          <strong>Comments</strong> {formatSimilarityPercent(pair.commentScore)}
+                        </span>
+                      </div>
                       <span className="pair-value">{pair.matchCount}</span>
                       <Link
                         className="secondary-button as-link"
@@ -970,6 +947,14 @@ function getUploadSummary(status: string, errorMessage: string | null) {
   }
 
   return "Status updated.";
+}
+
+function formatSimilarityPercent(value: number | null) {
+  if (value === null) {
+    return "N/A";
+  }
+
+  return `${(value * 100).toFixed(1)}%`;
 }
 
 function summarizeMessage(message: string, fallback: string) {

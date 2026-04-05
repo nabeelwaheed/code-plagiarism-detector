@@ -219,6 +219,10 @@ details summary {
   gap: 16px;
 }
 
+.form-compact {
+  max-width: 420px;
+}
+
 .stack-sm {
   gap: 10px;
 }
@@ -420,6 +424,12 @@ input[type="file"]::file-selector-button {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 18px;
+}
+
+.workspace-controls {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
 }
 
 .card-grid {
@@ -744,7 +754,7 @@ input[type="file"]::file-selector-button {
 .pair-table-row {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 110px 90px 88px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px 90px 88px;
   align-items: center;
 }
 
@@ -765,6 +775,21 @@ input[type="file"]::file-selector-button {
 
 .pair-value {
   font-weight: 700;
+}
+
+.pair-score-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.pair-score-line {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.pair-score-line strong {
+  color: var(--ink);
+  margin-right: 6px;
 }
 
 .pair-note {
@@ -845,7 +870,19 @@ input[type="file"]::file-selector-button {
 
 .evidence-legend {
   display: grid;
+  gap: 14px;
+}
+
+.legend-group {
+  display: grid;
   gap: 10px;
+}
+
+.legend-group-head {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .legend-grid {
@@ -871,6 +908,10 @@ input[type="file"]::file-selector-button {
 .legend-button:hover {
   border-color: rgba(29, 78, 216, 0.24);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.legend-button.is-active {
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
 }
 
 .legend-swatch {
