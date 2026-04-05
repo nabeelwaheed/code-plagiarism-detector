@@ -281,24 +281,24 @@ export function EvidenceViewer({
           <span className="pair-note">Select a match to scroll both panes and highlight the paired regions.</span>
         </div>
         <div className="legend-groups-layout">
-          {commentMatches.length > 0 ? (
-            <LegendGroup
-              activeMatchId={activeMatchId}
-              colors={colors}
-              matches={commentMatches}
-              onSelectMatch={revealMatch}
-              position="left"
-              title="Comment matches"
-            />
-          ) : null}
           {codeMatches.length > 0 ? (
             <LegendGroup
               activeMatchId={activeMatchId}
               colors={colors}
               matches={codeMatches}
               onSelectMatch={revealMatch}
-              position="right"
+              position="left"
               title="Code matches"
+            />
+          ) : null}
+          {commentMatches.length > 0 ? (
+            <LegendGroup
+              activeMatchId={activeMatchId}
+              colors={colors}
+              matches={commentMatches}
+              onSelectMatch={revealMatch}
+              position="right"
+              title="Comment matches"
             />
           ) : null}
         </div>
