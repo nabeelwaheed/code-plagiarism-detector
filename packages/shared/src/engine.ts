@@ -65,7 +65,6 @@ export interface EnginePairResult {
   leftSubmissionId: string;
   rightSubmissionId: string;
   similarityScore: number;
-  commentScore?: number;
   matchedTokenCount: number;
   matches: ViewerMatch[];
 }

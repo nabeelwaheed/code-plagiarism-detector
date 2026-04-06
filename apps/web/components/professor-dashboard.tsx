@@ -6,7 +6,7 @@ import { FormEvent, useState } from "react";
 import { createAssignment, listAssignments, type AssignmentSummary } from "../lib/api";
 import { useCurrentUserQuery, useLogoutMutation } from "./auth-hooks";
 
-export function ProfessorDashboard() {
+export function ProfessorDashboard({ successMessage }: { successMessage?: string | null }) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState<"java" | "c" | "cpp">("java");
@@ -99,20 +99,31 @@ export function ProfessorDashboard() {
             Create assignments, share keyIDs, and review uploads and suspicious pairs.
           </p>
         </div>
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={() => {
-            logoutMutation.mutate(undefined, {
-              onSettled: () => {
-                window.location.href = "/login";
-              },
-            });
-          }}
-        >
-          Sign out
-        </button>
+        <div className="toolbar-row">
+          <Link className="secondary-button as-link" href="/professor/settings">
+            Account settings
+          </Link>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              logoutMutation.mutate(undefined, {
+                onSettled: () => {
+                  window.location.href = "/login";
+                },
+              });
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </section>
+
+      {successMessage === "assignment-deleted" ? (
+        <div className="alert alert-info">
+          <p>The assignment was deleted successfully.</p>
+        </div>
+      ) : null}
 
       <section className="panel">
         <h2>Create Assignment</h2>

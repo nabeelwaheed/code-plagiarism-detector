@@ -1,9 +1,15 @@
 import { ProfessorDashboard } from "../../components/professor-dashboard";
 
-export default function ProfessorPage() {
+export default async function ProfessorPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ message?: string }>;
+}) {
+  const params = await searchParams;
+
   return (
     <main className="page-shell">
-      <ProfessorDashboard />
+      <ProfessorDashboard successMessage={params?.message ?? null} />
     </main>
   );
 }

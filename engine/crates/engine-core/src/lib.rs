@@ -50,8 +50,15 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
             params.gst_min_match_length,
         );
 
-        let mut matches = map_code_matches(left, right, &gst_result.tiles);
-        let (comment_matches, comment_score) = compare_comments(
+        let meaningful_tiles = filter_meaningful_code_tiles(
+            &gst_result.tiles,
+            left.normalized_tokens.len(),
+            right.normalized_tokens.len(),
+        );
+        let meaningful_matched_token_count = matched_token_count(&meaningful_tiles);
+
+        let mut matches = map_code_matches(left, right, &meaningful_tiles);
+        let comment_matches = compare_comments(
             left,
             right,
             processed_template.as_ref(),
@@ -61,8 +68,8 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
         matches.extend(comment_matches);
 
         let similarity_score = compute_code_similarity_score(
-            &gst_result.tiles,
-            gst_result.matched_token_count,
+            &meaningful_tiles,
+            meaningful_matched_token_count,
             left.normalized_tokens.len(),
             right.normalized_tokens.len(),
             params.gst_min_match_length,
@@ -73,8 +80,7 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
             left_submission_id: pair.left_submission_id,
             right_submission_id: pair.right_submission_id,
             similarity_score,
-            comment_score,
-            matched_token_count: gst_result.matched_token_count,
+            matched_token_count: meaningful_matched_token_count,
             matches,
         });
     }
@@ -236,6 +242,27 @@ fn map_code_matches(left: &ParsedSubmission, right: &ParsedSubmission, tiles: &[
     matches
 }
 
+fn filter_meaningful_code_tiles(tiles: &[Tile], left_len: usize, right_len: usize) -> Vec<Tile> {
+    let threshold = meaningful_tile_threshold(left_len, right_len);
+
+    tiles
+        .iter()
+        .filter(|tile| tile.length >= threshold)
+        .cloned()
+        .collect()
+}
+
+fn meaningful_tile_threshold(left_len: usize, right_len: usize) -> usize {
+    let smaller_tokens = left_len.min(right_len);
+    let scaled_threshold = (3 * smaller_tokens).div_ceil(100);
+
+    scaled_threshold.clamp(10, 25)
+}
+
+fn matched_token_count(tiles: &[Tile]) -> usize {
+    tiles.iter().map(|tile| tile.length).sum()
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct CodeSimilarityMetrics {
     coverage_left: f64,
@@ -253,14 +280,14 @@ struct CodeSimilarityMetrics {
 
 fn compute_code_similarity_score(
     tiles: &[Tile],
-    matched_token_count: usize,
+    _matched_token_count: usize,
     left_len: usize,
     right_len: usize,
     gst_min_match_length: usize,
 ) -> f64 {
     compute_code_similarity_metrics(
         tiles,
-        matched_token_count,
+        0,
         left_len,
         right_len,
         gst_min_match_length,
@@ -270,18 +297,21 @@ fn compute_code_similarity_score(
 
 fn compute_code_similarity_metrics(
     tiles: &[Tile],
-    matched_token_count: usize,
+    _matched_token_count: usize,
     left_len: usize,
     right_len: usize,
     gst_min_match_length: usize,
 ) -> CodeSimilarityMetrics {
-    if matched_token_count == 0 || tiles.is_empty() || left_len == 0 || right_len == 0 {
+    let meaningful_tiles = filter_meaningful_code_tiles(tiles, left_len, right_len);
+    let meaningful_matched_token_count = matched_token_count(&meaningful_tiles);
+
+    if meaningful_matched_token_count == 0 || meaningful_tiles.is_empty() || left_len == 0 || right_len == 0 {
         return CodeSimilarityMetrics {
             coverage_left: 0.0,
             coverage_right: 0.0,
             coverage_anchor: 0.0,
             longest_tile_len: 0,
-            tile_count: tiles.len(),
+            tile_count: meaningful_tiles.len(),
             average_tile_len: 0.0,
             concentration_ratio: 0.0,
             longest_tile_ratio_of_smaller_submission: 0.0,
@@ -291,16 +321,18 @@ fn compute_code_similarity_metrics(
         };
     }
 
-    let coverage_left = matched_token_count as f64 / left_len as f64;
-    let coverage_right = matched_token_count as f64 / right_len as f64;
-    let harmonic_coverage = symmetric_coverage_score(matched_token_count, left_len, right_len);
+    let coverage_left = meaningful_matched_token_count as f64 / left_len as f64;
+    let coverage_right = meaningful_matched_token_count as f64 / right_len as f64;
+    let harmonic_coverage =
+        symmetric_coverage_score(meaningful_matched_token_count, left_len, right_len);
     let geometric_coverage = (coverage_left * coverage_right).sqrt();
     let coverage_anchor = ((0.75 * harmonic_coverage) + (0.25 * geometric_coverage)).clamp(0.0, 1.0);
 
-    let longest_tile_len = tiles.iter().map(|tile| tile.length).max().unwrap_or(0);
-    let tile_count = tiles.len();
-    let average_tile_len = matched_token_count as f64 / tile_count as f64;
-    let concentration_ratio = (longest_tile_len as f64 / matched_token_count as f64).clamp(0.0, 1.0);
+    let longest_tile_len = meaningful_tiles.iter().map(|tile| tile.length).max().unwrap_or(0);
+    let tile_count = meaningful_tiles.len();
+    let average_tile_len = meaningful_matched_token_count as f64 / tile_count as f64;
+    let concentration_ratio =
+        (longest_tile_len as f64 / meaningful_matched_token_count as f64).clamp(0.0, 1.0);
     let smaller_submission_len = left_len.min(right_len).max(1);
     let longest_tile_ratio_of_smaller_submission =
         (longest_tile_len as f64 / smaller_submission_len as f64).clamp(0.0, 1.0);
@@ -353,15 +385,15 @@ fn compare_comments(
     template: Option<&ParsedSubmission>,
     minimum_comment_length: usize,
     starting_index: usize,
-) -> (Vec<PairMatch>, Option<f64>) {
+) -> Vec<PairMatch> {
+    let minimum_meaningful_comment_length =
+        minimum_comment_length.max(MEANINGFUL_COMMENT_MATCH_LENGTH);
     let template_counts = template_comment_counts(
         template.map(|parsed| parsed.comment_tokens.as_slice()),
-        minimum_comment_length,
+        minimum_meaningful_comment_length,
     );
-    let left_comments = prepared_comments(left, minimum_comment_length, &template_counts);
-    let right_comments = prepared_comments(right, minimum_comment_length, &template_counts);
-    let left_comment_count = left_comments.len();
-    let right_comment_count = right_comments.len();
+    let left_comments = prepared_comments(left, minimum_meaningful_comment_length, &template_counts);
+    let right_comments = prepared_comments(right, minimum_meaningful_comment_length, &template_counts);
 
     let mut left_by_text: BTreeMap<String, Vec<OwnedPreparedComment<'_>>> = BTreeMap::new();
     for comment in left_comments {
@@ -401,19 +433,7 @@ fn compare_comments(
         }
     }
 
-    let matched_count = matches.len();
-
-    let score = if left_comment_count == 0 && right_comment_count == 0 {
-        None
-    } else {
-        Some(symmetric_coverage_score(
-            matched_count,
-            left_comment_count,
-            right_comment_count,
-        ))
-    };
-
-    (matches, score)
+    matches
 }
 
 fn template_comment_counts(
@@ -475,6 +495,8 @@ struct OwnedPreparedComment<'a> {
     comment: &'a CommentToken,
     normalized_text: String,
 }
+
+const MEANINGFUL_COMMENT_MATCH_LENGTH: usize = 35;
 
 fn comment_match(
     match_index: usize,
@@ -579,7 +601,10 @@ fn line_column(line_starts: &[usize], byte_offset: usize) -> (usize, usize) {
 
 #[cfg(test)]
 mod tests {
-    use super::{analyze, compute_code_similarity_metrics, compute_code_similarity_score};
+    use super::{
+        analyze, compute_code_similarity_metrics, compute_code_similarity_score,
+        filter_meaningful_code_tiles, matched_token_count, meaningful_tile_threshold,
+    };
     use engine_contracts::{
         AnalysisLanguage, AnalysisPair, AnalysisParams, AnalysisRequest, AnalysisSubmission,
         SourceMapEntry, TemplateSource, SCHEMA_VERSION, SubmissionKind,
@@ -822,7 +847,7 @@ mod tests {
     #[test]
     fn template_comments_are_removed_from_comment_matches() {
         let template_comment = "// starter comment!\n";
-        let copied_comment = "// distinctive copied clue!!!\n";
+        let copied_comment = "// distinctive copied clue that stays meaningful across both submissions!!!\n";
         let left_source = format!("{template_comment}{copied_comment}class A {{}}\n");
         let right_source = format!("{template_comment}{copied_comment}class B {{}}\n");
         let template_source = format!("{template_comment}class Template {{}}\n");
@@ -868,11 +893,10 @@ mod tests {
             .count();
 
         assert_eq!(comment_matches, 1);
-        assert_eq!(pair.comment_score, Some(1.0));
     }
 
     #[test]
-    fn comment_normalization_ignores_punctuation_and_case() {
+    fn short_comment_matches_below_meaningful_threshold_are_excluded() {
         let request = AnalysisRequest {
             schema_version: SCHEMA_VERSION.to_string(),
             engine_version: "test".to_string(),
@@ -881,13 +905,60 @@ mod tests {
                 AnalysisSubmission {
                     submission_id: "left".to_string(),
                     submission_kind: SubmissionKind::Current,
-                    source: "// Hello, WORLD!!!\nclass A {}\n".to_string(),
+                    source: "// find top student\nclass A {}\n".to_string(),
                     source_map: vec![],
                 },
                 AnalysisSubmission {
                     submission_id: "right".to_string(),
                     submission_kind: SubmissionKind::Current,
-                    source: "/* hello world */\nclass B {}\n".to_string(),
+                    source: "/* find top student */\nclass B {}\n".to_string(),
+                    source_map: vec![],
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+        let comment_matches = pair
+            .matches
+            .iter()
+            .filter(|matched| matched.kind == engine_contracts::MatchKind::Comment)
+            .count();
+
+        assert_eq!(comment_matches, 0);
+    }
+
+    #[test]
+    fn comment_normalization_ignores_punctuation_and_case_for_meaningful_comments() {
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::Java,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source:
+                        "// Hello, WORLD! this distinctive copied comment stays meaningful today.\nclass A {}\n"
+                            .to_string(),
+                    source_map: vec![],
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source:
+                        "/* hello world this distinctive copied comment stays meaningful today */\nclass B {}\n"
+                            .to_string(),
                     source_map: vec![],
                 },
             ],
@@ -912,11 +983,11 @@ mod tests {
             .count();
 
         assert_eq!(comment_matches, 1);
-        assert_eq!(pair.comment_score, Some(1.0));
     }
 
     #[test]
-    fn repeated_identical_comments_do_not_cross_multiply() {
+    fn repeated_identical_meaningful_comments_do_not_cross_multiply() {
+        let repeated_comment = "// this repeated comment remains long enough to stay meaningful across copies\n";
         let request = AnalysisRequest {
             schema_version: SCHEMA_VERSION.to_string(),
             engine_version: "test".to_string(),
@@ -925,13 +996,13 @@ mod tests {
                 AnalysisSubmission {
                     submission_id: "left".to_string(),
                     submission_kind: SubmissionKind::Current,
-                    source: "// repeat this clue\n// repeat this clue\nclass A {}\n".to_string(),
+                    source: format!("{repeated_comment}{repeated_comment}class A {{}}\n"),
                     source_map: vec![],
                 },
                 AnalysisSubmission {
                     submission_id: "right".to_string(),
                     submission_kind: SubmissionKind::Current,
-                    source: "/* repeat this clue */\nclass B {}\n".to_string(),
+                    source: format!("/* {}*/\nclass B {{}}\n", repeated_comment.trim_start_matches("// ").trim()),
                     source_map: vec![],
                 },
             ],
@@ -956,8 +1027,75 @@ mod tests {
             .count();
 
         assert_eq!(comment_matches, 1);
-        let score = pair.comment_score.expect("comment score should be present");
-        assert!((score - (2.0 / 3.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn meaningful_tile_threshold_scales_and_caps() {
+        assert_eq!(meaningful_tile_threshold(20, 50), 10);
+        assert_eq!(meaningful_tile_threshold(400, 600), 12);
+        assert_eq!(meaningful_tile_threshold(2000, 3000), 25);
+    }
+
+    #[test]
+    fn weak_code_tiles_are_filtered_from_evidence() {
+        let tiles = filter_meaningful_code_tiles(
+            &[
+                Tile {
+                    left_start: 0,
+                    right_start: 0,
+                    length: 9,
+                },
+                Tile {
+                    left_start: 20,
+                    right_start: 20,
+                    length: 10,
+                },
+            ],
+            20,
+            20,
+        );
+
+        assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].length, 10);
+    }
+
+    #[test]
+    fn weak_code_tiles_do_not_contribute_to_final_similarity() {
+        let score = compute_code_similarity_score(
+            &[Tile {
+                left_start: 0,
+                right_start: 0,
+                length: 9,
+            }],
+            9,
+            20,
+            20,
+            8,
+        );
+
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn matched_token_count_uses_only_meaningful_tiles() {
+        let tiles = filter_meaningful_code_tiles(
+            &[
+                Tile {
+                    left_start: 0,
+                    right_start: 0,
+                    length: 9,
+                },
+                Tile {
+                    left_start: 20,
+                    right_start: 20,
+                    length: 11,
+                },
+            ],
+            40,
+            40,
+        );
+
+        assert_eq!(matched_token_count(&tiles), 11);
     }
 
     #[test]
@@ -1022,6 +1160,23 @@ mod tests {
         );
 
         assert!(score > 0.4);
+    }
+
+    #[test]
+    fn large_submission_threshold_cap_keeps_meaningful_tiles() {
+        let score = compute_code_similarity_score(
+            &[Tile {
+                left_start: 10,
+                right_start: 30,
+                length: 25,
+            }],
+            25,
+            1000,
+            1000,
+            8,
+        );
+
+        assert!(score > 0.0);
     }
 
     #[test]

@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { LoginForm } from "../../components/login-form";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ message?: string }>;
+}) {
+  const params = await searchParams;
+
   return (
     <main className="page-shell narrow-shell">
       <section className="hero-card">
@@ -20,6 +26,11 @@ export default function LoginPage() {
           </p>
         </div>
       </section>
+      {params?.message === "account-deleted" ? (
+        <div className="alert alert-info">
+          <p>Your professor account was deleted successfully.</p>
+        </div>
+      ) : null}
       <LoginForm />
     </main>
   );

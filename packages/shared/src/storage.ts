@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 const DEFAULT_OBJECT_STORAGE_ROOT = path.resolve(process.cwd(), "var", "object-storage");
 
@@ -39,6 +39,10 @@ export async function writeObjectBuffer(
 
 export async function readObjectBuffer(objectKey: string) {
   return readFile(resolveObjectStoragePath(objectKey));
+}
+
+export async function deleteObject(objectKey: string) {
+  await rm(resolveObjectStoragePath(objectKey), { force: true });
 }
 
 export function resolveObjectStoragePath(objectKey: string) {

@@ -124,8 +124,6 @@ pub struct PairAnalysisResult {
     pub left_submission_id: String,
     pub right_submission_id: String,
     pub similarity_score: f64,
-    #[serde(default)]
-    pub comment_score: Option<f64>,
     pub matched_token_count: usize,
     pub matches: Vec<PairMatch>,
 }

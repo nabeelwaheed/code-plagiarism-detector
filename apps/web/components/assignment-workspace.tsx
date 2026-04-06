@@ -2,9 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   createComparisonRun,
+  deleteAssignment,
+  deleteAssignmentCategory,
+  deleteAssignmentSubmission,
+  deleteAssignmentTemplate,
   downloadAllAssignmentSubmissions,
   downloadAssignmentSubmission,
   downloadAssignmentTemplate,
@@ -24,7 +29,10 @@ type SelectedArtifact =
   | { type: "template"; id: string }
   | null;
 
+const CODE_SUSPICIOUS_THRESHOLD = 0.35;
+
 export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
@@ -35,8 +43,10 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const [activePairCategory, setActivePairCategory] = useState<
     "current-current" | "current-historical"
   >("current-current");
+  const [showAllPairs, setShowAllPairs] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
   const [revealedIdentity, setRevealedIdentity] = useState<SubmissionIdentityRevealResponse | null>(null);
+  const [dangerFeedback, setDangerFeedback] = useState<string | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -132,6 +142,60 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       setRevealedIdentity(identity);
     },
   });
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: () => deleteAssignment(assignmentId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
+      ]);
+      router.push("/professor?message=assignment-deleted");
+    },
+  });
+  const deleteSubmissionMutation = useMutation({
+    mutationFn: (submissionId: string) => deleteAssignmentSubmission(assignmentId, submissionId),
+    onSuccess: async () => {
+      setDangerFeedback("Historical submission deleted. Comparison results were cleared.");
+      setSelectedArtifact(null);
+      setRevealedIdentity(null);
+      revealIdentityMutation.reset();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
+      ]);
+    },
+  });
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (templateId: string) => deleteAssignmentTemplate(assignmentId, templateId),
+    onSuccess: async () => {
+      setDangerFeedback("Template deleted. Comparison results were cleared.");
+      setSelectedArtifact(null);
+      setRevealedIdentity(null);
+      revealIdentityMutation.reset();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
+      ]);
+    },
+  });
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (category: "current" | "historical" | "template") =>
+      deleteAssignmentCategory(assignmentId, category),
+    onSuccess: async (result, category) => {
+      setDangerFeedback(
+        result.deletedCount > 0
+          ? `Deleted ${result.deletedCount} ${category === "template" ? "template item" : category + " submission"}${result.deletedCount === 1 ? "" : "s"}. Comparison results were cleared.`
+          : `There were no ${category} items to delete.`,
+      );
+      setSelectedArtifact(null);
+      setRevealedIdentity(null);
+      revealIdentityMutation.reset();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
+      ]);
+    },
+  });
 
   const latestVisibleRun = useMemo(
     () =>
@@ -191,6 +255,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const assignment = assignmentQuery.data;
   const currentSubmissions = assignment.submissions.filter((item) => item.kind === "current");
   const historicalSubmissions = assignment.submissions.filter((item) => item.kind === "historical");
+  const templateVersions = assignment.templateVersions;
   const latestUpload = trackedUploadQuery.data ?? assignment.uploadBatches[0] ?? null;
   const currentVsCurrentPairs = latestVisibleRun?.pairResults.filter(
     (pair) => pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "current",
@@ -202,7 +267,87 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   ) ?? [];
   const visiblePairs =
     activePairCategory === "current-current" ? currentVsCurrentPairs : currentVsHistoricalPairs;
+  const sectionedPairs = partitionSuspiciousPairs(visiblePairs);
   const selectedArtifactKey = selectedArtifact ? `${selectedArtifact.type}:${selectedArtifact.id}` : null;
+  const hasActiveAssignmentJobs =
+    assignment.uploadBatches.some(
+      (batch) => batch.status === "received" || batch.status === "processing",
+    )
+    || assignment.comparisonRuns.some(
+      (run) => run.status === "queued" || run.status === "running",
+    );
+  const isDangerActionPending =
+    deleteAssignmentMutation.isPending
+    || deleteSubmissionMutation.isPending
+    || deleteTemplateMutation.isPending
+    || deleteCategoryMutation.isPending;
+  const destructiveError =
+    deleteAssignmentMutation.error?.message
+    ?? deleteSubmissionMutation.error?.message
+    ?? deleteTemplateMutation.error?.message
+    ?? deleteCategoryMutation.error?.message
+    ?? null;
+
+  const handleDeleteAssignment = () => {
+    setDangerFeedback(null);
+
+    const confirmation = window.prompt(
+      `Type DELETE to permanently remove "${assignment.title}" and all of its assignment data.`,
+      "",
+    );
+
+    if (confirmation !== "DELETE") {
+      return;
+    }
+
+    deleteAssignmentMutation.mutate();
+  };
+
+  const handleDeleteHistoricalSubmission = (submissionId: string, displayName: string) => {
+    setDangerFeedback(null);
+
+    const confirmed = window.confirm(
+      `Delete the historical submission "${displayName}"? This will also clear comparison results for this assignment.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleteSubmissionMutation.mutate(submissionId);
+  };
+
+  const handleDeleteTemplate = (templateId: string, versionNumber: number) => {
+    setDangerFeedback(null);
+
+    const confirmed = window.confirm(
+      `Delete template version ${versionNumber}? This will also clear comparison results for this assignment.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleteTemplateMutation.mutate(templateId);
+  };
+
+  const handleDeleteCategory = (
+    category: "current" | "historical" | "template",
+    count: number,
+  ) => {
+    setDangerFeedback(null);
+
+    const label = category === "template" ? "template item" : `${category} submission`;
+    const confirmed = window.confirm(
+      `Delete all ${count} ${label}${count === 1 ? "" : "s"} in this assignment? This will also clear comparison results for this assignment.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleteCategoryMutation.mutate(category);
+  };
 
   return (
     <div className="page-stack">
@@ -411,7 +556,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
               </div>
             ) : null}
 
-            <div className="stats-row">
+              <div className="stats-row">
               <div className="stat-card">
                 <span>Current submissions</span>
                 <strong>{currentSubmissions.length}</strong>
@@ -421,8 +566,8 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 <strong>{historicalSubmissions.length}</strong>
               </div>
               <div className="stat-card">
-                <span>Template code</span>
-                <strong>{assignment.activeTemplate ? 1 : 0}</strong>
+                <span>Template versions</span>
+                <strong>{templateVersions.length}</strong>
               </div>
             </div>
           </section>
@@ -461,6 +606,16 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                           type="button"
                         >
                           View
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={isDangerActionPending || hasActiveAssignmentJobs}
+                          onClick={() =>
+                            handleDeleteHistoricalSubmission(submission.id, submission.displayName)
+                          }
+                          type="button"
+                        >
+                          Delete
                         </button>
                         <button
                           className="secondary-button"
@@ -540,62 +695,78 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
             <section className="panel">
               <div className="section-heading">
-                <h2>Template</h2>
-                <span className={`status-badge ${assignment.activeTemplate ? "is-active" : ""}`}>
-                  {assignment.activeTemplate ? "Active" : "Missing"}
+                <h2>Template versions</h2>
+                <span className={`status-badge ${templateVersions.length > 0 ? "is-active" : ""}`}>
+                  {templateVersions.length > 0 ? templateVersions.length : "Missing"}
                 </span>
               </div>
-              {assignment.activeTemplate ? (
+              {templateVersions.length > 0 ? (
                 <div className="card-grid">
-                  <article
-                    className={`assignment-card${selectedArtifactKey === `template:${assignment.activeTemplate.id}` ? " is-selected" : ""}`}
-                  >
-                    <div className="stack-sm">
-                      <p className="eyebrow">Template code</p>
-                      <h3>Version {assignment.activeTemplate.versionNumber}</h3>
-                      <div className="meta-line">
-                        <span>{assignment.activeTemplate.fileCount} files</span>
-                        <span className="meta-dot" />
-                        <span>{formatDateTime(assignment.activeTemplate.createdAt)}</span>
+                  {templateVersions.map((template) => (
+                    <article
+                      className={`assignment-card${selectedArtifactKey === `template:${template.id}` ? " is-selected" : ""}`}
+                      key={template.id}
+                    >
+                      <div className="stack-sm">
+                        <p className="eyebrow">Template code</p>
+                        <h3>Version {template.versionNumber}</h3>
+                        <div className="meta-line">
+                          <span>{template.fileCount} files</span>
+                          <span className="meta-dot" />
+                          <span>{formatDateTime(template.createdAt)}</span>
+                        </div>
+                        <div className="meta-line">
+                          <span className={`status-badge ${template.isActive ? "is-active" : ""}`}>
+                            {template.isActive ? "Active template" : "Inactive template"}
+                          </span>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="card-actions">
-                      <button
-                        className={
-                          selectedArtifactKey === `template:${assignment.activeTemplate.id}`
-                            ? "primary-button"
-                            : "secondary-button"
-                        }
-                        onClick={() =>
-                          setSelectedArtifact({
-                            type: "template",
-                            id: assignment.activeTemplate!.id,
-                          })
-                        }
-                        type="button"
-                      >
-                        View
-                      </button>
-                      <button
-                        className="secondary-button"
-                        disabled={downloadMutation.isPending}
-                        onClick={() =>
-                          downloadMutation.mutate({
-                            type: "template",
-                            id: assignment.activeTemplate!.id,
-                          })
-                        }
-                        type="button"
-                      >
-                        Download
-                      </button>
-                    </div>
-                  </article>
+                      <div className="card-actions">
+                        <button
+                          className={
+                            selectedArtifactKey === `template:${template.id}`
+                              ? "primary-button"
+                              : "secondary-button"
+                          }
+                          onClick={() =>
+                            setSelectedArtifact({
+                              type: "template",
+                              id: template.id,
+                            })
+                          }
+                          type="button"
+                        >
+                          View
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={downloadMutation.isPending}
+                          onClick={() =>
+                            downloadMutation.mutate({
+                              type: "template",
+                              id: template.id,
+                            })
+                          }
+                          type="button"
+                        >
+                          Download
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={isDangerActionPending || hasActiveAssignmentJobs}
+                          onClick={() => handleDeleteTemplate(template.id, template.versionNumber)}
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
               ) : (
                 <div className="empty-state">
-                  <p>No template code uploaded yet.</p>
+                  <p>No template versions uploaded yet.</p>
                 </div>
               )}
             </section>
@@ -782,10 +953,19 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   <span className="meta-dot" />
                   <span>Latest run: {latestVisibleRun.id}</span>
                   <span className="meta-dot" />
-                  <span>
-                    {visiblePairs.length} {visiblePairs.length === 1 ? "pair" : "pairs"} in this view
-                  </span>
+                  <span>{sectionedPairs.shownCount} shown of {sectionedPairs.totalCount} pairs</span>
                 </div>
+                {sectionedPairs.hiddenPairs.length > 0 ? (
+                  <div className="toolbar-row">
+                    <button
+                      className="secondary-button"
+                      onClick={() => setShowAllPairs((current) => !current)}
+                      type="button"
+                    >
+                      {showAllPairs ? "Hide lower-priority pairs" : "Show all pairs"}
+                    </button>
+                  </div>
+                ) : null}
                 {latestVisibleRun.errorMessage ? (
                   <div className="history-details">
                     {shouldCollapseMessage(latestVisibleRun.errorMessage) ? (
@@ -801,41 +981,33 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
               </div>
 
               {visiblePairs.length > 0 ? (
-                <div className="pair-table">
-                  <div className="pair-table-head">
-                    <span>Left</span>
-                    <span>Right</span>
-                    <span>Scores</span>
-                    <span>Matches</span>
-                    <span>Viewer</span>
-                  </div>
-                  {visiblePairs.map((pair) => (
-                    <div className="pair-table-row" key={pair.id}>
-                      <div className="stack-sm">
-                        <strong>{pair.leftSubmission.displayName}</strong>
-                        <span className="pair-note">{capitalizeLabel(pair.leftSubmission.kind)}</span>
-                      </div>
-                      <div className="stack-sm">
-                        <strong>{pair.rightSubmission.displayName}</strong>
-                        <span className="pair-note">{capitalizeLabel(pair.rightSubmission.kind)}</span>
-                      </div>
-                      <div className="pair-score-stack">
-                        <span className="pair-score-line">
-                          <strong>Code</strong> {formatSimilarityPercent(pair.similarityScore)}
-                        </span>
-                        <span className="pair-score-line">
-                          <strong>Comments</strong> {formatSimilarityPercent(pair.commentScore)}
-                        </span>
-                      </div>
-                      <span className="pair-value">{pair.matchCount}</span>
-                      <Link
-                        className="secondary-button as-link"
-                        href={`/professor/assignments/${assignment.id}/pairs/${pair.id}`}
-                      >
-                        Open
-                      </Link>
-                    </div>
-                  ))}
+                <div className="section-stack">
+                  {sectionedPairs.codeSuspicious.length > 0 ? (
+                    <PairSection
+                      assignmentId={assignment.id}
+                      description={`Code similarity at or above ${formatSimilarityPercent(CODE_SUSPICIOUS_THRESHOLD)}.`}
+                      pairs={sectionedPairs.codeSuspicious}
+                      title="Suspicious by code"
+                    />
+                  ) : null}
+
+                  {sectionedPairs.commentSupportedLowCode.length > 0 ? (
+                    <PairSection
+                      assignmentId={assignment.id}
+                      description="Visible by default because they have one or more meaningful comment matches, but they stay below the main code-suspicious pairs."
+                      pairs={sectionedPairs.commentSupportedLowCode}
+                      title="Comment-supported low-code pairs"
+                    />
+                  ) : null}
+
+                  {showAllPairs && sectionedPairs.hiddenPairs.length > 0 ? (
+                    <PairSection
+                      assignmentId={assignment.id}
+                      description="Remaining pairs shown for completeness. These stay below the main suspicious sections."
+                      pairs={sectionedPairs.hiddenPairs}
+                      title="Remaining pairs"
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <div className="empty-state">
@@ -854,6 +1026,89 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
           )}
         </section>
       )}
+
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Danger zone</p>
+            <h2>Delete assignment data</h2>
+          </div>
+          <span className="status-badge is-failed">Destructive</span>
+        </div>
+
+        <div className="section-stack">
+          <p className="subtle-text">
+            These actions permanently remove assignment data. Any delete that changes the comparison
+            pool also clears comparison results for this assignment.
+          </p>
+
+          {hasActiveAssignmentJobs ? (
+            <div className="alert alert-info">
+              <p>Deletes are disabled while uploads or comparison runs are still in progress.</p>
+            </div>
+          ) : null}
+
+          {dangerFeedback ? (
+            <div className="alert alert-info">
+              <p>{dangerFeedback}</p>
+            </div>
+          ) : null}
+
+          {destructiveError ? (
+            <div className="alert alert-error">
+              <p>{destructiveError}</p>
+            </div>
+          ) : null}
+
+          <div className="surface-muted stack-sm">
+            <strong>Delete all items in one category</strong>
+            <div className="toolbar-row">
+              <button
+                className="secondary-button"
+                disabled={isDangerActionPending || hasActiveAssignmentJobs || currentSubmissions.length === 0}
+                onClick={() => handleDeleteCategory("current", currentSubmissions.length)}
+                type="button"
+              >
+                Delete all current ({currentSubmissions.length})
+              </button>
+              <button
+                className="secondary-button"
+                disabled={isDangerActionPending || hasActiveAssignmentJobs || historicalSubmissions.length === 0}
+                onClick={() => handleDeleteCategory("historical", historicalSubmissions.length)}
+                type="button"
+              >
+                Delete all historical ({historicalSubmissions.length})
+              </button>
+              <button
+                className="secondary-button"
+                disabled={isDangerActionPending || hasActiveAssignmentJobs || templateVersions.length === 0}
+                onClick={() => handleDeleteCategory("template", templateVersions.length)}
+                type="button"
+              >
+                Delete all template ({templateVersions.length})
+              </button>
+            </div>
+          </div>
+
+          <div className="surface-muted stack-sm">
+            <strong>Delete entire assignment</strong>
+            <p className="pair-note">
+              Type <span className="mono">DELETE</span> when prompted to remove this assignment and all
+              related uploads, artifacts, and comparison data.
+            </p>
+            <div className="toolbar-row">
+              <button
+                className="secondary-button"
+                disabled={isDangerActionPending || hasActiveAssignmentJobs}
+                onClick={handleDeleteAssignment}
+                type="button"
+              >
+                {deleteAssignmentMutation.isPending ? "Deleting..." : "Delete assignment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -936,6 +1191,150 @@ function formatSimilarityPercent(value: number | null) {
   }
 
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function PairSection({
+  assignmentId,
+  description,
+  pairs,
+  title,
+}: {
+  assignmentId: string;
+  description: string;
+  pairs: SuspiciousPairListItem[];
+  title: string;
+}) {
+  return (
+    <section className="surface-muted stack-sm">
+      <div className="stack-sm">
+        <div className="section-heading">
+          <h3>{title}</h3>
+          <span className="status-badge">{pairs.length}</span>
+        </div>
+        <p className="pair-note">{description}</p>
+      </div>
+
+      <div className="pair-table">
+        <div className="pair-table-head">
+          <span>Left</span>
+          <span>Right</span>
+          <span>Scores</span>
+          <span>Matches</span>
+          <span>Viewer</span>
+        </div>
+        {pairs.map((pair) => (
+          <div className="pair-table-row" key={pair.id}>
+            <div className="stack-sm">
+              <strong>{pair.leftSubmission.displayName}</strong>
+              <span className="pair-note">{capitalizeLabel(pair.leftSubmission.kind)}</span>
+            </div>
+            <div className="stack-sm">
+              <strong>{pair.rightSubmission.displayName}</strong>
+              <span className="pair-note">{capitalizeLabel(pair.rightSubmission.kind)}</span>
+            </div>
+            <div className="pair-score-stack">
+              <span className="pair-score-line">
+                <strong>Code</strong> {formatSimilarityPercent(pair.similarityScore)}
+              </span>
+              <span className="pair-score-line">
+                <strong>Comment matches</strong> {pair.commentMatchCount}
+              </span>
+            </div>
+            <span className="pair-value">{pair.matchCount}</span>
+            <Link
+              className="secondary-button as-link"
+              href={`/professor/assignments/${assignmentId}/pairs/${pair.id}`}
+            >
+              Open
+            </Link>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+type SuspiciousPairListItem = {
+  id: string;
+  similarityScore: number;
+  commentMatchCount: number;
+  matchedTokenCount: number;
+  matchCount: number;
+  leftSubmission: {
+    id: string;
+    displayName: string;
+    kind: "current" | "historical";
+  };
+  rightSubmission: {
+    id: string;
+    displayName: string;
+    kind: "current" | "historical";
+  };
+};
+
+function partitionSuspiciousPairs(pairs: SuspiciousPairListItem[]) {
+  const indexedPairs = pairs.map((pair, index) => ({ pair, index }));
+  const codeSuspicious = indexedPairs
+    .filter(({ pair }) => pair.similarityScore >= CODE_SUSPICIOUS_THRESHOLD)
+    .sort((left, right) =>
+      compareSuspiciousPairs(
+        left,
+        right,
+        [
+          (pair) => pair.similarityScore,
+          (pair) => pair.matchedTokenCount,
+          (pair) => pair.commentMatchCount,
+        ],
+      ),
+    )
+    .map(({ pair }) => pair);
+  const commentSupportedLowCode = indexedPairs
+    .filter(
+      ({ pair }) =>
+        pair.similarityScore < CODE_SUSPICIOUS_THRESHOLD && pair.commentMatchCount >= 1,
+    )
+    .sort((left, right) =>
+      compareSuspiciousPairs(
+        left,
+        right,
+        [
+          (pair) => pair.commentMatchCount,
+          (pair) => pair.similarityScore,
+          (pair) => pair.matchedTokenCount,
+        ],
+      ),
+    )
+    .map(({ pair }) => pair);
+  const hiddenPairs = indexedPairs
+    .filter(
+      ({ pair }) =>
+        pair.similarityScore < CODE_SUSPICIOUS_THRESHOLD && pair.commentMatchCount < 1,
+    )
+    .sort((left, right) => left.index - right.index)
+    .map(({ pair }) => pair);
+
+  return {
+    codeSuspicious,
+    commentSupportedLowCode,
+    hiddenPairs,
+    shownCount: codeSuspicious.length + commentSupportedLowCode.length,
+    totalCount: pairs.length,
+  };
+}
+
+function compareSuspiciousPairs(
+  left: { pair: SuspiciousPairListItem; index: number },
+  right: { pair: SuspiciousPairListItem; index: number },
+  selectors: Array<(pair: SuspiciousPairListItem) => number>,
+) {
+  for (const selector of selectors) {
+    const difference = selector(right.pair) - selector(left.pair);
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return left.index - right.index;
 }
 
 function summarizeMessage(message: string, fallback: string) {

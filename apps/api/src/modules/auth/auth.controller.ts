@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Post, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Post, Res } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { AuthService } from "./auth.service.js";
-import { CurrentUser, Public } from "./auth.decorators.js";
+import { CurrentUser, Public, Roles } from "./auth.decorators.js";
+import { ChangePasswordDto } from "./dto/change-password.dto.js";
 import { LoginDto } from "./dto/login.dto.js";
 import { ProfessorSignupDto } from "./dto/professor-signup.dto.js";
 import type { AuthenticatedUser } from "./auth.types.js";
@@ -56,13 +57,7 @@ export class AuthController {
       await this.sessionService.revokeSessionByToken(rawToken);
     }
 
-    reply.clearCookie(apiRuntimeConfig.session.cookieName, {
-      httpOnly: true,
-      secure: apiRuntimeConfig.session.secure,
-      sameSite: apiRuntimeConfig.session.sameSite,
-      domain: apiRuntimeConfig.session.domain,
-      path: "/",
-    });
+    clearSessionCookie(reply);
 
     return { ok: true, userId: user.id };
   }
@@ -75,6 +70,27 @@ export class AuthController {
       role: user.role,
     };
   }
+
+  @Roles("professor")
+  @Post("change-password")
+  async changePassword(
+    @Body() payload: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.authService.changePassword(user.id, payload);
+    return { ok: true };
+  }
+
+  @Roles("professor")
+  @Delete("account")
+  async deleteOwnAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    await this.authService.deleteProfessorAccount(user.id);
+    clearSessionCookie(reply);
+    return { ok: true };
+  }
 }
 
 function setSessionCookie(reply: FastifyReply, rawToken: string, expiresAt: Date) {
@@ -85,5 +101,15 @@ function setSessionCookie(reply: FastifyReply, rawToken: string, expiresAt: Date
     domain: apiRuntimeConfig.session.domain,
     path: "/",
     expires: expiresAt,
+  });
+}
+
+function clearSessionCookie(reply: FastifyReply) {
+  reply.clearCookie(apiRuntimeConfig.session.cookieName, {
+    httpOnly: true,
+    secure: apiRuntimeConfig.session.secure,
+    sameSite: apiRuntimeConfig.session.sameSite,
+    domain: apiRuntimeConfig.session.domain,
+    path: "/",
   });
 }

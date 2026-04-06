@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { UploadPurpose } from "@prisma/client";
+import { MatchKind, UploadPurpose } from "@prisma/client";
 import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -157,7 +157,7 @@ export class ComparisonsService {
       pairResults: comparisonRun.pairResults.map((pairResult) => ({
         id: pairResult.id,
         similarityScore: pairResult.similarityScore,
-        commentScore: pairResult.commentScore,
+        commentMatchCount: countCommentMatches(pairResult.matches),
         matchedTokenCount: pairResult.matchedTokenCount,
         leftSubmission: {
           id: pairResult.leftSubmission.id,
@@ -285,7 +285,7 @@ export class ComparisonsService {
         language: pairResult.comparisonRun.assignment.language.toLowerCase(),
       },
       similarityScore: pairResult.similarityScore,
-      commentScore: pairResult.commentScore,
+      commentMatchCount: countCommentMatches(pairResult.matches),
       matchedTokenCount: pairResult.matchedTokenCount,
       leftSubmission: {
         id: pairResult.leftSubmission.id,
@@ -398,4 +398,8 @@ function isBulkPublicUploadBatch(input: {
   uploaderId: string | null;
 }) {
   return isPublicAnonymousStudentUploadBatch(input) && input.encryptedIdentity === null;
+}
+
+function countCommentMatches(matches: Array<{ kind: MatchKind }>) {
+  return matches.filter((match) => match.kind === MatchKind.COMMENT).length;
 }

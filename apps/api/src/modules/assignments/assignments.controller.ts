@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
 import { AssignmentsService } from "./assignments.service.js";
 import { CreateAssignmentDto } from "./dto/create-assignment.dto.js";
 import { CurrentUser, Roles } from "../auth/auth.decorators.js";
@@ -28,5 +28,13 @@ export class AssignmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.assignmentsService.getAssignment(assignmentId, user);
+  }
+
+  @Delete(":assignmentId")
+  deleteAssignment(
+    @Param("assignmentId") assignmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.assignmentsService.deleteAssignment(assignmentId, user);
   }
 }

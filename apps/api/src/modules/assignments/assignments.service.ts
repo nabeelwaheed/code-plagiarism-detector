@@ -4,6 +4,13 @@ import { randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { CreateAssignmentDto } from "./dto/create-assignment.dto.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
+import {
+  assertAssignmentHasNoActiveJobs,
+  assertProfessorOwnsAssignment,
+  collectAssignmentObjectKeys,
+  deleteAssignmentOwnedData,
+  deleteObjectKeysBestEffort,
+} from "./assignment-maintenance.js";
 
 @Injectable()
 export class AssignmentsService {
@@ -158,6 +165,8 @@ export class AssignmentsService {
       throw new ForbiddenException("You do not have access to this assignment");
     }
 
+    const activeTemplate = assignment.templateVersions.find((template) => template.isActive) ?? null;
+
     return {
       id: assignment.id,
       title: assignment.title,
@@ -190,13 +199,20 @@ export class AssignmentsService {
       })),
       activeTemplate: assignment.templateVersions.find((template) => template.isActive)
         ? {
-            id: assignment.templateVersions.find((template) => template.isActive)!.id,
-            versionNumber: assignment.templateVersions.find((template) => template.isActive)!.versionNumber,
+            id: activeTemplate!.id,
+            versionNumber: activeTemplate!.versionNumber,
             isActive: true,
-            createdAt: assignment.templateVersions.find((template) => template.isActive)!.createdAt,
-            fileCount: assignment.templateVersions.find((template) => template.isActive)!.files.length,
+            createdAt: activeTemplate!.createdAt,
+            fileCount: activeTemplate!.files.length,
           }
         : null,
+      templateVersions: assignment.templateVersions.map((template) => ({
+        id: template.id,
+        versionNumber: template.versionNumber,
+        isActive: template.isActive,
+        createdAt: template.createdAt,
+        fileCount: template.files.length,
+      })),
       comparisonRuns: assignment.comparisonRuns.map((run) => ({
         id: run.id,
         status: run.status.toLowerCase(),
@@ -207,7 +223,7 @@ export class AssignmentsService {
         pairResults: run.pairResults.map((pairResult) => ({
           id: pairResult.id,
           similarityScore: pairResult.similarityScore,
-          commentScore: pairResult.commentScore,
+          commentMatchCount: countCommentMatches(pairResult.matches),
           matchedTokenCount: pairResult.matchedTokenCount,
           leftSubmission: {
             id: pairResult.leftSubmission.id,
@@ -225,7 +241,59 @@ export class AssignmentsService {
     };
   }
 
+  async deleteAssignment(assignmentId: string, user: AuthenticatedUser) {
+    await assertProfessorOwnsAssignment(this.prisma, assignmentId, user.id);
+    await assertAssignmentHasNoActiveJobs(this.prisma, assignmentId);
+
+    const assignment = await this.prisma.assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        uploadBatches: {
+          select: {
+            originalObjectKey: true,
+          },
+        },
+        submissions: {
+          select: {
+            files: {
+              select: {
+                storageObjectKey: true,
+              },
+            },
+          },
+        },
+        templateVersions: {
+          select: {
+            files: {
+              select: {
+                storageObjectKey: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!assignment) {
+      return { ok: true };
+    }
+
+    const objectKeys = collectAssignmentObjectKeys(assignment);
+
+    await this.prisma.$transaction(async (tx) => {
+      await deleteAssignmentOwnedData(tx, assignmentId);
+    });
+
+    await deleteObjectKeysBestEffort(objectKeys);
+
+    return { ok: true };
+  }
+
   private generateAssignmentKey() {
     return randomBytes(8).toString("hex");
   }
+}
+
+function countCommentMatches(matches: Array<{ kind: "CODE" | "COMMENT" }>) {
+  return matches.filter((match) => match.kind === "COMMENT").length;
 }

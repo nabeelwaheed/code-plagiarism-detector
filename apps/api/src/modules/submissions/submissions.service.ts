@@ -4,11 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { UploadPurpose } from "@prisma/client";
+import { Prisma, SubmissionKind, UploadPurpose } from "@prisma/client";
 import { zipSync } from "fflate";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   createObjectKey,
+  deleteObject,
   readObjectBuffer,
   writeObjectBuffer,
 } from "@similarity/shared";
@@ -23,6 +24,12 @@ import {
   getSubmissionIdentityPublicKey,
   validateEncryptedIdentityString,
 } from "./submission-identity.crypto.js";
+import {
+  assertAssignmentHasNoActiveJobs,
+  assertProfessorOwnsAssignment,
+  clearAssignmentComparisonData,
+  promoteNewestRemainingTemplate,
+} from "../assignments/assignment-maintenance.js";
 
 @Injectable()
 export class SubmissionsService {
@@ -644,19 +651,305 @@ export class SubmissionsService {
     };
   }
 
-  private async assertProfessorOwnsAssignment(assignmentId: string, professorId: string) {
-    const assignment = await this.prisma.assignment.findUnique({
-      where: { id: assignmentId },
-      select: { professorId: true },
+  async deleteSubmission(
+    assignmentId: string,
+    submissionId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+    await assertAssignmentHasNoActiveJobs(this.prisma, assignmentId);
+
+    const submission = await this.prisma.submission.findFirst({
+      where: {
+        id: submissionId,
+        assignmentId,
+      },
+      include: {
+        files: {
+          select: {
+            storageObjectKey: true,
+          },
+        },
+        uploadBatch: {
+          select: {
+            id: true,
+            originalObjectKey: true,
+          },
+        },
+      },
     });
 
-    if (!assignment) {
-      throw new NotFoundException("That assignment no longer exists");
+    if (!submission) {
+      throw new NotFoundException("That submission no longer exists");
     }
 
-    if (assignment.professorId !== professorId) {
-      throw new ForbiddenException("You do not have access to this assignment");
+    if (submission.kind !== SubmissionKind.HISTORICAL) {
+      throw new BadRequestException(
+        "Only historical submissions can be deleted individually right now.",
+      );
     }
+
+    const objectKeys = new Set<string>(submission.files.map((file) => file.storageObjectKey));
+
+    await this.prisma.$transaction(async (tx) => {
+      await clearAssignmentComparisonData(tx, assignmentId);
+
+      await tx.submissionFile.deleteMany({
+        where: { submissionId: submission.id },
+      });
+
+      await tx.submission.delete({
+        where: { id: submission.id },
+      });
+
+      const removedUploadBatchKey = await this.deleteUploadBatchIfEmpty(tx, submission.uploadBatch.id);
+      if (removedUploadBatchKey) {
+        objectKeys.add(removedUploadBatchKey);
+      }
+    });
+
+    await deleteObjectKeysBestEffort(objectKeys);
+
+    return { ok: true, deletedCount: 1, category: "historical" };
+  }
+
+  async deleteTemplate(
+    assignmentId: string,
+    templateId: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+    await assertAssignmentHasNoActiveJobs(this.prisma, assignmentId);
+
+    const template = await this.prisma.assignmentTemplate.findFirst({
+      where: {
+        id: templateId,
+        assignmentId,
+      },
+      include: {
+        files: {
+          select: {
+            storageObjectKey: true,
+          },
+        },
+        uploadBatch: {
+          select: {
+            id: true,
+            originalObjectKey: true,
+          },
+        },
+      },
+    });
+
+    if (!template) {
+      throw new NotFoundException("That template no longer exists");
+    }
+
+    const objectKeys = new Set<string>(template.files.map((file) => file.storageObjectKey));
+
+    await this.prisma.$transaction(async (tx) => {
+      await clearAssignmentComparisonData(tx, assignmentId);
+
+      await tx.templateFile.deleteMany({
+        where: { assignmentTemplateId: template.id },
+      });
+
+      await tx.assignmentTemplate.delete({
+        where: { id: template.id },
+      });
+
+      if (template.isActive) {
+        await promoteNewestRemainingTemplate(tx, assignmentId);
+      }
+
+      const removedUploadBatchKey = await this.deleteUploadBatchIfEmpty(tx, template.uploadBatch.id);
+      if (removedUploadBatchKey) {
+        objectKeys.add(removedUploadBatchKey);
+      }
+    });
+
+    await deleteObjectKeysBestEffort(objectKeys);
+
+    return { ok: true, deletedCount: 1, category: "template" };
+  }
+
+  async deleteAssignmentCategory(
+    assignmentId: string,
+    category: string,
+    user: AuthenticatedUser,
+  ) {
+    await this.assertProfessorOwnsAssignment(assignmentId, user.id);
+    await assertAssignmentHasNoActiveJobs(this.prisma, assignmentId);
+
+    if (category === "current" || category === "historical") {
+      const submissionKind =
+        category === "current" ? SubmissionKind.CURRENT : SubmissionKind.HISTORICAL;
+      const submissions = await this.prisma.submission.findMany({
+        where: {
+          assignmentId,
+          kind: submissionKind,
+        },
+        include: {
+          files: {
+            select: {
+              storageObjectKey: true,
+            },
+          },
+          uploadBatch: {
+            select: {
+              id: true,
+              originalObjectKey: true,
+            },
+          },
+        },
+      });
+
+      if (submissions.length === 0) {
+        return { ok: true, deletedCount: 0, category };
+      }
+
+      const objectKeys = new Set<string>();
+      const uploadBatchIds = new Set<string>();
+
+      for (const submission of submissions) {
+        uploadBatchIds.add(submission.uploadBatch.id);
+        for (const file of submission.files) {
+          objectKeys.add(file.storageObjectKey);
+        }
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        await clearAssignmentComparisonData(tx, assignmentId);
+
+        await tx.submissionFile.deleteMany({
+          where: {
+            submission: {
+              assignmentId,
+              kind: submissionKind,
+            },
+          },
+        });
+
+        await tx.submission.deleteMany({
+          where: {
+            assignmentId,
+            kind: submissionKind,
+          },
+        });
+
+        for (const uploadBatchId of uploadBatchIds) {
+          const removedUploadBatchKey = await this.deleteUploadBatchIfEmpty(tx, uploadBatchId);
+          if (removedUploadBatchKey) {
+            objectKeys.add(removedUploadBatchKey);
+          }
+        }
+      });
+
+      await deleteObjectKeysBestEffort(objectKeys);
+
+      return { ok: true, deletedCount: submissions.length, category };
+    }
+
+    if (category === "template") {
+      const templates = await this.prisma.assignmentTemplate.findMany({
+        where: {
+          assignmentId,
+        },
+        include: {
+          files: {
+            select: {
+              storageObjectKey: true,
+            },
+          },
+          uploadBatch: {
+            select: {
+              id: true,
+              originalObjectKey: true,
+            },
+          },
+        },
+      });
+
+      if (templates.length === 0) {
+        return { ok: true, deletedCount: 0, category };
+      }
+
+      const objectKeys = new Set<string>();
+      const uploadBatchIds = new Set<string>();
+
+      for (const template of templates) {
+        uploadBatchIds.add(template.uploadBatch.id);
+        for (const file of template.files) {
+          objectKeys.add(file.storageObjectKey);
+        }
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        await clearAssignmentComparisonData(tx, assignmentId);
+
+        await tx.templateFile.deleteMany({
+          where: {
+            assignmentTemplate: {
+              assignmentId,
+            },
+          },
+        });
+
+        await tx.assignmentTemplate.deleteMany({
+          where: { assignmentId },
+        });
+
+        for (const uploadBatchId of uploadBatchIds) {
+          const removedUploadBatchKey = await this.deleteUploadBatchIfEmpty(tx, uploadBatchId);
+          if (removedUploadBatchKey) {
+            objectKeys.add(removedUploadBatchKey);
+          }
+        }
+      });
+
+      await deleteObjectKeysBestEffort(objectKeys);
+
+      return { ok: true, deletedCount: templates.length, category };
+    }
+
+    throw new BadRequestException("Unsupported deletion category");
+  }
+
+  private async assertProfessorOwnsAssignment(assignmentId: string, professorId: string) {
+    await assertProfessorOwnsAssignment(this.prisma, assignmentId, professorId);
+  }
+
+  private async deleteUploadBatchIfEmpty(
+    tx: Prisma.TransactionClient,
+    uploadBatchId: string,
+  ) {
+    const uploadBatch = await tx.uploadBatch.findUnique({
+      where: { id: uploadBatchId },
+      select: {
+        id: true,
+        originalObjectKey: true,
+        _count: {
+          select: {
+            submissions: true,
+            templateVersions: true,
+          },
+        },
+      },
+    });
+
+    if (!uploadBatch) {
+      return null;
+    }
+
+    if (uploadBatch._count.submissions > 0 || uploadBatch._count.templateVersions > 0) {
+      return null;
+    }
+
+    await tx.uploadBatch.delete({
+      where: { id: uploadBatchId },
+    });
+
+    return uploadBatch.originalObjectKey;
   }
 
   private async findActiveAssignmentKey(rawAssignmentKey: string) {
@@ -806,4 +1099,16 @@ function sanitizeArchiveSegment(value: string) {
 function sanitizeDownloadName(value: string) {
   const sanitized = value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   return sanitized || "download";
+}
+
+async function deleteObjectKeysBestEffort(objectKeys: Iterable<string>) {
+  const results = await Promise.allSettled(
+    [...new Set(objectKeys)].map((objectKey) => deleteObject(objectKey)),
+  );
+
+  results.forEach((result) => {
+    if (result.status === "rejected") {
+      console.warn("failed to delete object storage artifact", result.reason);
+    }
+  });
 }

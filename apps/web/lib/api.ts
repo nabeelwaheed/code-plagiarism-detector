@@ -77,6 +77,13 @@ export interface AssignmentDetail {
     createdAt: string;
     fileCount: number;
   } | null;
+  templateVersions: Array<{
+    id: string;
+    versionNumber: number;
+    isActive: boolean;
+    createdAt: string;
+    fileCount: number;
+  }>;
   comparisonRuns: Array<{
     id: string;
     status: string;
@@ -87,7 +94,7 @@ export interface AssignmentDetail {
     pairResults: Array<{
       id: string;
       similarityScore: number;
-      commentScore: number | null;
+      commentMatchCount: number;
       matchedTokenCount: number;
       leftSubmission: {
         id: string;
@@ -152,7 +159,7 @@ export interface PairDetailResponse {
     language: "java" | "c" | "cpp";
   };
   similarityScore: number;
-  commentScore: number | null;
+  commentMatchCount: number;
   matchedTokenCount: number;
   leftSubmission: {
     id: string;
@@ -330,6 +337,12 @@ export function getAssignment(assignmentId: string) {
   return apiFetch<AssignmentDetail>(`/assignments/${assignmentId}`);
 }
 
+export function deleteAssignment(assignmentId: string) {
+  return apiFetch<{ ok: boolean }>(`/assignments/${assignmentId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createComparisonRun(assignmentId: string) {
   return apiFetch<{ id: string }>("/comparison-runs", {
     method: "POST",
@@ -427,6 +440,19 @@ export function getCurrentUser() {
   }>("/auth/me");
 }
 
+export function changePassword(input: { currentPassword: string; newPassword: string }) {
+  return apiFetch<{ ok: boolean }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteOwnAccount() {
+  return apiFetch<{ ok: boolean }>("/auth/account", {
+    method: "DELETE",
+  });
+}
+
 export function getSubmissionIdentityPublicKey() {
   return apiFetch<SubmissionIdentityPublicKeyResponse>("/uploads/public/identity-key");
 }
@@ -458,6 +484,36 @@ export function revealAssignmentSubmissionIdentity(assignmentId: string, submiss
 export function getAssignmentTemplateDetail(assignmentId: string, templateId: string) {
   return apiFetch<AssignmentArtifactDetail>(
     `/uploads/assignment/${assignmentId}/templates/${templateId}`,
+  );
+}
+
+export function deleteAssignmentSubmission(assignmentId: string, submissionId: string) {
+  return apiFetch<{ ok: boolean; deletedCount: number; category: string }>(
+    `/uploads/assignment/${assignmentId}/submissions/${submissionId}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+export function deleteAssignmentTemplate(assignmentId: string, templateId: string) {
+  return apiFetch<{ ok: boolean; deletedCount: number; category: string }>(
+    `/uploads/assignment/${assignmentId}/templates/${templateId}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+export function deleteAssignmentCategory(
+  assignmentId: string,
+  category: "current" | "historical" | "template",
+) {
+  return apiFetch<{ ok: boolean; deletedCount: number; category: string }>(
+    `/uploads/assignment/${assignmentId}/category/${category}`,
+    {
+      method: "DELETE",
+    },
   );
 }
 

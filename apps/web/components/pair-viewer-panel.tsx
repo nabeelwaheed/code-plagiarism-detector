@@ -106,8 +106,8 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
               <strong>{pair.matchedTokenCount}</strong>
             </div>
             <div className="metric-card">
-              <span>Comment similarity</span>
-              <strong>{formatSimilarityPercent(pair.commentScore)}</strong>
+              <span>Comment matches</span>
+              <strong>{pair.commentMatchCount}</strong>
             </div>
           </div>
 

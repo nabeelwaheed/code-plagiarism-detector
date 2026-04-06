@@ -38,7 +38,6 @@ export async function persistComparisonResults(
           leftSubmissionId: pairResult.leftSubmissionId,
           rightSubmissionId: pairResult.rightSubmissionId,
           similarityScore: pairResult.similarityScore,
-          commentScore: pairResult.commentScore,
           matchedTokenCount: pairResult.matchedTokenCount,
           sortOrder: index,
         },

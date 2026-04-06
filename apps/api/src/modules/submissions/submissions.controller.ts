@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -119,6 +120,36 @@ export class SubmissionsController {
     @Query("token") token: string | undefined,
   ) {
     return this.submissionsService.getPublicUploadBatch(uploadBatchId, token);
+  }
+
+  @Roles("professor")
+  @Delete("assignment/:assignmentId/category/:category")
+  deleteAssignmentCategory(
+    @Param("assignmentId") assignmentId: string,
+    @Param("category") category: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.submissionsService.deleteAssignmentCategory(assignmentId, category, user);
+  }
+
+  @Roles("professor")
+  @Delete("assignment/:assignmentId/submissions/:submissionId")
+  deleteSubmission(
+    @Param("assignmentId") assignmentId: string,
+    @Param("submissionId") submissionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.submissionsService.deleteSubmission(assignmentId, submissionId, user);
+  }
+
+  @Roles("professor")
+  @Delete("assignment/:assignmentId/templates/:templateId")
+  deleteTemplate(
+    @Param("assignmentId") assignmentId: string,
+    @Param("templateId") templateId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.submissionsService.deleteTemplate(assignmentId, templateId, user);
   }
 
   @Roles("professor")
