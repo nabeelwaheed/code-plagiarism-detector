@@ -65,6 +65,7 @@ model Assignment {
   id                   String              @id @default(cuid())
   title                String
   language             AssignmentLanguage
+  dueDate              DateTime?
   professorId          String
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt

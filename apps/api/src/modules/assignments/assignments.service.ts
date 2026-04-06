@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
 import { AssignmentLanguage } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { CreateAssignmentDto } from "./dto/create-assignment.dto.js";
+import { UpdateAssignmentDueDateDto } from "./dto/update-assignment-due-date.dto.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 import {
   assertAssignmentHasNoActiveJobs,
@@ -17,26 +18,29 @@ export class AssignmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createAssignment(payload: CreateAssignmentDto, user: AuthenticatedUser) {
+    const dueDate = parseDueDateInput(payload.dueDate);
     const created = await this.prisma.assignment.create({
       data: {
         title: payload.title,
         language: payload.language.toUpperCase() as AssignmentLanguage,
+        dueDate,
         professorId: user.id,
         keys: {
           create: {
             publicKey: this.generateAssignmentKey(),
           },
         },
-      },
+      } as never,
       include: {
         keys: true,
-      },
-    });
+      } as never,
+    }) as unknown as CreatedAssignmentRecord;
 
     return {
       id: created.id,
       title: created.title,
       language: created.language.toLowerCase(),
+      dueDate: created.dueDate,
       professorId: created.professorId,
       createdAt: created.createdAt,
       keys: created.keys.map((key) => ({
@@ -81,6 +85,7 @@ export class AssignmentsService {
       id: assignment.id,
       title: assignment.title,
       language: assignment.language.toLowerCase(),
+      dueDate: (assignment as AssignmentWithDueDate).dueDate,
       professorId: assignment.professorId,
       createdAt: assignment.createdAt,
       activeKey: assignment.keys[0]?.publicKey ?? null,
@@ -171,6 +176,7 @@ export class AssignmentsService {
       id: assignment.id,
       title: assignment.title,
       language: assignment.language.toLowerCase(),
+      dueDate: (assignment as AssignmentWithDueDate).dueDate,
       professorId: assignment.professorId,
       createdAt: assignment.createdAt,
       updatedAt: assignment.updatedAt,
@@ -289,6 +295,30 @@ export class AssignmentsService {
     return { ok: true };
   }
 
+  async updateAssignmentDueDate(
+    assignmentId: string,
+    payload: UpdateAssignmentDueDateDto,
+    user: AuthenticatedUser,
+  ) {
+    await assertProfessorOwnsAssignment(this.prisma, assignmentId, user.id);
+
+    const updatedAssignment = await this.prisma.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        dueDate: parseDueDateInput(payload.dueDate),
+      } as never,
+      select: {
+        id: true,
+        dueDate: true,
+      } as never,
+    }) as unknown as { id: string; dueDate: Date | null };
+
+    return {
+      id: updatedAssignment.id,
+      dueDate: updatedAssignment.dueDate,
+    };
+  }
+
   private generateAssignmentKey() {
     return randomBytes(8).toString("hex");
   }
@@ -297,3 +327,40 @@ export class AssignmentsService {
 function countCommentMatches(matches: Array<{ kind: "CODE" | "COMMENT" }>) {
   return matches.filter((match) => match.kind === "COMMENT").length;
 }
+
+export function parseDueDateInput(value?: string | null) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  const parsedDate = new Date(trimmedValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new BadRequestException("Please provide a valid due date.");
+  }
+
+  return parsedDate;
+}
+
+type AssignmentWithDueDate = {
+  dueDate: Date | null;
+};
+
+type CreatedAssignmentRecord = {
+  id: string;
+  title: string;
+  language: AssignmentLanguage;
+  dueDate: Date | null;
+  professorId: string;
+  createdAt: Date;
+  keys: Array<{
+    id: string;
+    publicKey: string;
+    isActive: boolean;
+    createdAt: Date;
+  }>;
+};

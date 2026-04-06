@@ -1,0 +1,2 @@
+ALTER TABLE "Assignment"
+ADD COLUMN "dueDate" TIMESTAMP(3);

@@ -18,6 +18,7 @@ import {
   getAssignmentSubmissionDetail,
   getAssignmentTemplateDetail,
   getUploadBatch,
+  updateAssignmentDueDate,
   uploadProfessorArchive,
   type SubmissionIdentityRevealResponse,
 } from "../lib/api";
@@ -47,6 +48,9 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
   const [revealedIdentity, setRevealedIdentity] = useState<SubmissionIdentityRevealResponse | null>(null);
   const [dangerFeedback, setDangerFeedback] = useState<string | null>(null);
+  const [dueDateInput, setDueDateInput] = useState("");
+  const [isEditingDueDate, setIsEditingDueDate] = useState(false);
+  const [dueDateFeedback, setDueDateFeedback] = useState<string | null>(null);
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -196,6 +200,18 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       ]);
     },
   });
+  const updateDueDateMutation = useMutation({
+    mutationFn: (nextDueDate: string | null) => updateAssignmentDueDate(assignmentId, nextDueDate),
+    onSuccess: async (result) => {
+      setDueDateFeedback(result.dueDate ? "Due date updated." : "Due date cleared.");
+      setIsEditingDueDate(false);
+      setDueDateInput(toDateTimeLocalInputValue(result.dueDate));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["assignments"] }),
+        queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
+      ]);
+    },
+  });
 
   const latestVisibleRun = useMemo(
     () =>
@@ -210,6 +226,10 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     setRevealedIdentity(null);
     revealIdentityMutation.reset();
   }, [selectedArtifact?.id, selectedArtifact?.type]);
+
+  useEffect(() => {
+    setDueDateInput(toDateTimeLocalInputValue(assignmentQuery.data?.dueDate ?? null));
+  }, [assignmentQuery.data?.dueDate]);
 
   const handleHideIdentity = () => {
     setRevealedIdentity(null);
@@ -349,6 +369,24 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
     deleteCategoryMutation.mutate(category);
   };
 
+  const handleDueDateSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setDueDateFeedback(null);
+
+    const nextDueDate = dueDateInput.trim() ? new Date(dueDateInput) : null;
+    if (nextDueDate && Number.isNaN(nextDueDate.getTime())) {
+      setDueDateFeedback("Please provide a valid due date.");
+      return;
+    }
+
+    updateDueDateMutation.mutate(nextDueDate ? nextDueDate.toISOString() : null);
+  };
+
+  const handleClearDueDate = () => {
+    setDueDateFeedback(null);
+    updateDueDateMutation.mutate(null);
+  };
+
   return (
     <div className="page-stack">
       <section className="hero-card">
@@ -369,6 +407,86 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
             <Link className="secondary-button as-link" href="/professor">
               Back to professor home
             </Link>
+          </div>
+          <div className="surface-muted stack-sm">
+            <span className="muted-text">Due date</span>
+            <p>{assignment.dueDate ? formatDateTime(assignment.dueDate) : "No due date set"}</p>
+            <p className="pair-note">Shown in your local time. This pass does not enforce deadlines.</p>
+            {dueDateFeedback ? (
+              <div className="alert alert-info">
+                <p>{dueDateFeedback}</p>
+              </div>
+            ) : null}
+            {updateDueDateMutation.error ? (
+              <div className="alert alert-error">
+                <p>{updateDueDateMutation.error.message}</p>
+              </div>
+            ) : null}
+            {isEditingDueDate ? (
+              <form className="form-stack form-compact" onSubmit={handleDueDateSubmit}>
+                <label className="field">
+                  <span>Due date</span>
+                  <input
+                    type="datetime-local"
+                    value={dueDateInput}
+                    onChange={(event) => setDueDateInput(event.target.value)}
+                  />
+                </label>
+                <div className="toolbar-row">
+                  <button
+                    className="primary-button"
+                    disabled={updateDueDateMutation.isPending}
+                    type="submit"
+                  >
+                    {updateDueDateMutation.isPending ? "Saving..." : "Save due date"}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={updateDueDateMutation.isPending}
+                    type="button"
+                    onClick={() => {
+                      setIsEditingDueDate(false);
+                      setDueDateInput(toDateTimeLocalInputValue(assignment.dueDate));
+                      setDueDateFeedback(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="secondary-button"
+                    disabled={updateDueDateMutation.isPending || !assignment.dueDate}
+                    type="button"
+                    onClick={handleClearDueDate}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="toolbar-row">
+                <button
+                  className="secondary-button"
+                  disabled={updateDueDateMutation.isPending}
+                  type="button"
+                  onClick={() => {
+                    setDueDateFeedback(null);
+                    setIsEditingDueDate(true);
+                  }}
+                >
+                  {assignment.dueDate ? "Edit due date" : "Set due date"}
+                </button>
+                {assignment.dueDate ? (
+                  <button
+                    className="secondary-button"
+                    disabled={updateDueDateMutation.isPending}
+                    type="button"
+                    onClick={handleClearDueDate}
+                  >
+                    Clear due date
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
           <div className="surface-muted stack-sm">
             <span className="muted-text">Comparison</span>
@@ -1115,6 +1233,25 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString();
+}
+
+function toDateTimeLocalInputValue(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  const hours = `${date.getHours()}`.padStart(2, "0");
+  const minutes = `${date.getMinutes()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function formatUploadPurpose(purpose: string) {

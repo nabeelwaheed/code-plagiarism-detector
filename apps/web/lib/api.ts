@@ -21,6 +21,7 @@ export interface AssignmentSummary {
   id: string;
   title: string;
   language: "java" | "c" | "cpp";
+  dueDate: string | null;
   professorId: string;
   createdAt: string;
   activeKey: string | null;
@@ -40,6 +41,7 @@ export interface AssignmentDetail {
   id: string;
   title: string;
   language: "java" | "c" | "cpp";
+  dueDate: string | null;
   professorId: string;
   createdAt: string;
   updatedAt: string;
@@ -320,11 +322,13 @@ export function listAssignments() {
 export function createAssignment(input: {
   title: string;
   language: "java" | "c" | "cpp";
+  dueDate?: string | null;
 }) {
   return apiFetch<{
     id: string;
     title: string;
     language: "java" | "c" | "cpp";
+    dueDate: string | null;
     professorId: string;
     keys: Array<{ publicKey: string }>;
   }>("/assignments", {
@@ -340,6 +344,13 @@ export function getAssignment(assignmentId: string) {
 export function deleteAssignment(assignmentId: string) {
   return apiFetch<{ ok: boolean }>(`/assignments/${assignmentId}`, {
     method: "DELETE",
+  });
+}
+
+export function updateAssignmentDueDate(assignmentId: string, dueDate?: string | null) {
+  return apiFetch<{ id: string; dueDate: string | null }>(`/assignments/${assignmentId}/due-date`, {
+    method: "PATCH",
+    body: JSON.stringify({ dueDate: dueDate ?? null }),
   });
 }
 

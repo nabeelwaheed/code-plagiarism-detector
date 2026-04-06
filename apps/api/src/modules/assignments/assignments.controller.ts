@@ -1,6 +1,7 @@
-import { Body, Controller, Delete, Get, Param, Post } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post } from "@nestjs/common";
 import { AssignmentsService } from "./assignments.service.js";
 import { CreateAssignmentDto } from "./dto/create-assignment.dto.js";
+import { UpdateAssignmentDueDateDto } from "./dto/update-assignment-due-date.dto.js";
 import { CurrentUser, Roles } from "../auth/auth.decorators.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
 
@@ -36,5 +37,14 @@ export class AssignmentsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.assignmentsService.deleteAssignment(assignmentId, user);
+  }
+
+  @Patch(":assignmentId/due-date")
+  updateAssignmentDueDate(
+    @Param("assignmentId") assignmentId: string,
+    @Body() payload: UpdateAssignmentDueDateDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.assignmentsService.updateAssignmentDueDate(assignmentId, payload, user);
   }
 }

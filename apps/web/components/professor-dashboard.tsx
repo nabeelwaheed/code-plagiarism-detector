@@ -10,6 +10,7 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState<"java" | "c" | "cpp">("java");
+  const [dueDateInput, setDueDateInput] = useState("");
   const [copyFeedback, setCopyFeedback] = useState<{
     assignmentId: string;
     status: "copied" | "failed";
@@ -30,10 +31,12 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
       createAssignment({
         title,
         language,
+        dueDate: dueDateInput ? new Date(dueDateInput).toISOString() : null,
       }),
     onSuccess: () => {
       setTitle("");
       setLanguage("java");
+      setDueDateInput("");
       void queryClient.invalidateQueries({ queryKey: ["assignments", session?.userId] });
     },
   });
@@ -148,6 +151,15 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
               <option value="cpp">C++</option>
             </select>
           </label>
+          <label className="field">
+            <span>Due date</span>
+            <input
+              type="datetime-local"
+              value={dueDateInput}
+              onChange={(event) => setDueDateInput(event.target.value)}
+            />
+          </label>
+          <p className="muted-text">Optional. This is stored as a timestamp and shown in local time.</p>
           <button
             className="primary-button"
             disabled={createAssignmentMutation.isPending || !title.trim()}
@@ -200,6 +212,9 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
                 {assignment.submissionCounts.historical}
               </p>
               <p className="subtle-text">
+                Due date: {assignment.dueDate ? formatDateTime(assignment.dueDate) : "none"}
+              </p>
+              <p className="subtle-text">
                 Latest run:{" "}
                 {assignment.latestComparisonRun
                   ? `${assignment.latestComparisonRun.status} (${assignment.latestComparisonRun.pairCount} pairs)`
@@ -232,4 +247,8 @@ function copyWithDocumentFallback(value: string) {
   if (!copied) {
     throw new Error("copy command failed");
   }
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString();
 }
