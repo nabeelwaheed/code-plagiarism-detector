@@ -82,7 +82,7 @@ function loadApiRuntimeConfig(): ApiRuntimeConfig {
     },
     engine: {
       version: getEnvValue("ENGINE_VERSION", "0.1.0"),
-      gstMinMatchLength: getIntegerEnv("ENGINE_GST_MIN_MATCH_LENGTH", 8),
+      gstMinMatchLength: getIntegerEnv("ENGINE_GST_MIN_MATCH_LENGTH", 6),
       minimumCommentLength: getIntegerEnv("ENGINE_MINIMUM_COMMENT_LENGTH", 12),
     },
   };

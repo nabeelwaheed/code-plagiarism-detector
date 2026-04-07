@@ -1,5 +1,4 @@
 use engine_contracts::{AnalysisLanguage, SourceMapEntry};
-use std::collections::HashMap;
 use tree_sitter::{Node, Parser, Tree};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,14 +43,9 @@ trait LanguageAdapter {
     fn build_tree(&self, source: &str) -> Result<Tree, String>;
     fn is_comment_kind(&self, node_kind: &str) -> bool;
     fn should_skip_subtree(&self, node_kind: &str) -> bool;
+    fn normalize_subtree_token(&self, node_kind: &str) -> Option<String>;
     fn should_skip_leaf(&self, node_kind: &str, raw_text: &str) -> bool;
-    fn normalize_code_token(
-        &self,
-        node_kind: &str,
-        raw_text: &str,
-        identifier_map: &mut HashMap<String, String>,
-        next_identifier: &mut usize,
-    ) -> String;
+    fn normalize_code_token(&self, node_kind: &str, raw_text: &str) -> String;
 }
 
 fn parse_with_adapter(
@@ -62,15 +56,11 @@ fn parse_with_adapter(
     let tree = adapter.build_tree(source)?;
     let mut code_tokens = Vec::new();
     let mut comment_tokens = Vec::new();
-    let mut identifier_map = HashMap::new();
-    let mut next_identifier = 1usize;
 
     collect_tokens(
         tree.root_node(),
         source,
         adapter,
-        &mut identifier_map,
-        &mut next_identifier,
         &mut code_tokens,
         &mut comment_tokens,
     );
@@ -93,13 +83,30 @@ fn collect_tokens(
     node: Node,
     source: &str,
     adapter: &dyn LanguageAdapter,
-    identifier_map: &mut HashMap<String, String>,
-    next_identifier: &mut usize,
     code_tokens: &mut Vec<CodeToken>,
     comment_tokens: &mut Vec<CommentToken>,
 ) {
     let node_kind = node.kind();
     if adapter.should_skip_subtree(node_kind) {
+        return;
+    }
+
+    if let Some(normalized_value) = adapter.normalize_subtree_token(node_kind) {
+        let start = node.start_byte();
+        let end = node.end_byte();
+
+        if end <= start || end > source.len() {
+            return;
+        }
+
+        let raw_text = &source[start..end];
+        code_tokens.push(CodeToken {
+            normalized_value,
+            raw_text: raw_text.to_string(),
+            byte_start: start,
+            byte_end: end,
+            node_kind: node_kind.to_string(),
+        });
         return;
     }
 
@@ -128,12 +135,7 @@ fn collect_tokens(
         }
 
         code_tokens.push(CodeToken {
-            normalized_value: adapter.normalize_code_token(
-                node_kind,
-                raw_text,
-                identifier_map,
-                next_identifier,
-            ),
+            normalized_value: adapter.normalize_code_token(node_kind, raw_text),
             raw_text: raw_text.to_string(),
             byte_start: start,
             byte_end: end,
@@ -148,8 +150,6 @@ fn collect_tokens(
                 child,
                 source,
                 adapter,
-                identifier_map,
-                next_identifier,
                 code_tokens,
                 comment_tokens,
             );
@@ -189,19 +189,25 @@ impl LanguageAdapter for JavaAdapter {
         matches!(node_kind, "package_declaration" | "import_declaration")
     }
 
+    fn normalize_subtree_token(&self, node_kind: &str) -> Option<String> {
+        match node_kind {
+            "string_literal" => Some("STR".to_string()),
+            "character_literal" => Some("CHAR".to_string()),
+            _ => None,
+        }
+    }
+
     fn should_skip_leaf(&self, _node_kind: &str, raw_text: &str) -> bool {
         raw_text.trim().is_empty()
     }
 
-    fn normalize_code_token(
-        &self,
-        node_kind: &str,
-        raw_text: &str,
-        identifier_map: &mut HashMap<String, String>,
-        next_identifier: &mut usize,
-    ) -> String {
-        if matches!(node_kind, "identifier" | "type_identifier") {
-            return normalized_identifier(raw_text, identifier_map, next_identifier);
+    fn normalize_code_token(&self, node_kind: &str, raw_text: &str) -> String {
+        if node_kind == "identifier" {
+            return "ID".to_string();
+        }
+
+        if node_kind == "type_identifier" {
+            return "TYPE_ID".to_string();
         }
 
         if matches!(
@@ -254,18 +260,20 @@ impl LanguageAdapter for CAdapter {
         node_kind.starts_with("preproc_")
     }
 
+    fn normalize_subtree_token(&self, node_kind: &str) -> Option<String> {
+        match node_kind {
+            "string_literal" | "concatenated_string" => Some("STR_LIT".to_string()),
+            "char_literal" | "character_literal" => Some("CHAR_LIT".to_string()),
+            _ => None,
+        }
+    }
+
     fn should_skip_leaf(&self, node_kind: &str, raw_text: &str) -> bool {
         raw_text.trim().is_empty() || node_kind.starts_with("preproc_")
     }
 
-    fn normalize_code_token(
-        &self,
-        node_kind: &str,
-        raw_text: &str,
-        identifier_map: &mut HashMap<String, String>,
-        next_identifier: &mut usize,
-    ) -> String {
-        normalize_cfamily_token(node_kind, raw_text, identifier_map, next_identifier)
+    fn normalize_code_token(&self, node_kind: &str, raw_text: &str) -> String {
+        normalize_cfamily_token(node_kind, raw_text, LanguageFlavor::C)
     }
 }
 
@@ -289,29 +297,50 @@ impl LanguageAdapter for CppAdapter {
         node_kind.starts_with("preproc_")
     }
 
+    fn normalize_subtree_token(&self, node_kind: &str) -> Option<String> {
+        match node_kind {
+            "string_literal" | "concatenated_string" | "raw_string_literal" => {
+                Some("STR_LIT".to_string())
+            }
+            "char_literal" | "character_literal" => Some("CHAR_LIT".to_string()),
+            _ => None,
+        }
+    }
+
     fn should_skip_leaf(&self, node_kind: &str, raw_text: &str) -> bool {
         raw_text.trim().is_empty() || node_kind.starts_with("preproc_")
     }
 
-    fn normalize_code_token(
-        &self,
-        node_kind: &str,
-        raw_text: &str,
-        identifier_map: &mut HashMap<String, String>,
-        next_identifier: &mut usize,
-    ) -> String {
-        normalize_cfamily_token(node_kind, raw_text, identifier_map, next_identifier)
+    fn normalize_code_token(&self, node_kind: &str, raw_text: &str) -> String {
+        normalize_cfamily_token(node_kind, raw_text, LanguageFlavor::Cpp)
     }
+}
+
+#[derive(Clone, Copy)]
+enum LanguageFlavor {
+    C,
+    Cpp,
 }
 
 fn normalize_cfamily_token(
     node_kind: &str,
     raw_text: &str,
-    identifier_map: &mut HashMap<String, String>,
-    next_identifier: &mut usize,
+    language: LanguageFlavor,
 ) -> String {
-    if node_kind == "identifier" || node_kind.ends_with("_identifier") {
-        return normalized_identifier(raw_text, identifier_map, next_identifier);
+    if node_kind == "identifier" {
+        return "ID".to_string();
+    }
+
+    if node_kind == "type_identifier" {
+        return "TYPE_ID".to_string();
+    }
+
+    if node_kind == "field_identifier" {
+        return "FIELD_ID".to_string();
+    }
+
+    if matches!(language, LanguageFlavor::Cpp) && node_kind == "namespace_identifier" {
+        return "NS_ID".to_string();
     }
 
     if node_kind == "number_literal" {
@@ -332,17 +361,134 @@ fn normalize_cfamily_token(
     raw_text.to_string()
 }
 
-fn normalized_identifier(
-    raw_text: &str,
-    identifier_map: &mut HashMap<String, String>,
-    next_identifier: &mut usize,
-) -> String {
-    if let Some(existing) = identifier_map.get(raw_text) {
-        return existing.clone();
+#[cfg(test)]
+mod tests {
+    use super::parse_submission;
+    use engine_contracts::AnalysisLanguage;
+
+    #[test]
+    fn java_string_and_char_literals_collapse_to_placeholders() {
+        let parsed = parse_submission(
+            AnalysisLanguage::Java,
+            "class Demo { void run() { String label = \"menu text\"; char initial = 'x'; } }\n",
+            vec![],
+        )
+        .expect("Java source should parse");
+
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "STR"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "CHAR"));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("menu")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token == "\""));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token == "'x'"));
     }
 
-    let value = format!("ID{}", *next_identifier);
-    *next_identifier += 1;
-    identifier_map.insert(raw_text.to_string(), value.clone());
-    value
+    #[test]
+    fn c_string_and_char_literals_collapse_to_placeholders() {
+        let parsed = parse_submission(
+            AnalysisLanguage::C,
+            "const char *label = \"menu\" \" text\"; char initial = 'x';\n",
+            vec![],
+        )
+        .expect("C source should parse");
+
+        assert_eq!(
+            parsed
+                .normalized_tokens
+                .iter()
+                .filter(|token| token.as_str() == "STR_LIT")
+                .count(),
+            1
+        );
+        assert_eq!(
+            parsed
+                .normalized_tokens
+                .iter()
+                .filter(|token| token.as_str() == "CHAR_LIT")
+                .count(),
+            1
+        );
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("menu")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token == "\""));
+    }
+
+    #[test]
+    fn cpp_string_and_char_literals_collapse_to_placeholders() {
+        let parsed = parse_submission(
+            AnalysisLanguage::Cpp,
+            "std::string label = R\"(menu text)\"; char initial = 'x';\n",
+            vec![],
+        )
+        .expect("C++ source should parse");
+
+        assert_eq!(
+            parsed
+                .normalized_tokens
+                .iter()
+                .filter(|token| token.as_str() == "STR_LIT")
+                .count(),
+            1
+        );
+        assert_eq!(
+            parsed
+                .normalized_tokens
+                .iter()
+                .filter(|token| token.as_str() == "CHAR_LIT")
+                .count(),
+            1
+        );
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("menu")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token == "\""));
+    }
+
+    #[test]
+    fn java_identifiers_use_fixed_categories_without_numbering() {
+        let parsed = parse_submission(
+            AnalysisLanguage::Java,
+            "class Demo { Helper helper; void run(Helper value) { Helper local = value; helper = local; } }\n",
+            vec![],
+        )
+        .expect("Java source should parse");
+
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "ID"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "TYPE_ID"));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.starts_with("ID1")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.starts_with("ID2")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("Demo")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("Helper")));
+    }
+
+    #[test]
+    fn c_identifiers_use_fixed_categories_without_numbering() {
+        let parsed = parse_submission(
+            AnalysisLanguage::C,
+            "struct Item { int value; }; int main(void) { struct Item item; item.value = 1; return item.value; }\n",
+            vec![],
+        )
+        .expect("C source should parse");
+
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "ID"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "TYPE_ID"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "FIELD_ID"));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.starts_with("ID1")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("Item")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("value")));
+    }
+
+    #[test]
+    fn cpp_identifiers_use_fixed_categories_without_numbering() {
+        let parsed = parse_submission(
+            AnalysisLanguage::Cpp,
+            "namespace demo { struct Item { int value; }; }\nint main() { demo::Item item; item.value = 1; return item.value; }\n",
+            vec![],
+        )
+        .expect("C++ source should parse");
+
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "ID"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "TYPE_ID"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "FIELD_ID"));
+        assert!(parsed.normalized_tokens.iter().any(|token| token == "NS_ID"));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.starts_with("ID1")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("demo")));
+        assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("Item")));
+    }
 }

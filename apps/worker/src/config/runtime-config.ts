@@ -38,7 +38,7 @@ function loadWorkerRuntimeConfig(): WorkerRuntimeConfig {
     archiveMaxDepth: getPositiveInteger("ARCHIVE_MAX_DEPTH", 8),
     archiveMaxSourceFiles: getPositiveInteger("ARCHIVE_MAX_SOURCE_FILES", 2000),
     archiveMaxExpandedBytes: getPositiveInteger("ARCHIVE_MAX_EXPANDED_BYTES", 50 * 1024 * 1024),
-    gstMinMatchLength: getPositiveInteger("ENGINE_GST_MIN_MATCH_LENGTH", 8),
+    gstMinMatchLength: getPositiveInteger("ENGINE_GST_MIN_MATCH_LENGTH", 6),
     minimumCommentLength: getPositiveInteger("ENGINE_MINIMUM_COMMENT_LENGTH", 12),
   };
 }
