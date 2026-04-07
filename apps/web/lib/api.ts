@@ -299,10 +299,17 @@ export function login(email: string, password: string) {
   });
 }
 
-export function signupProfessor(email: string, password: string) {
+export function signupProfessor(payload: {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  title?: string;
+  department?: string;
+}) {
   return apiFetch<LoginResponse>("/auth/professor-signup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(payload),
   });
 }
 

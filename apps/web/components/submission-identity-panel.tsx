@@ -1,5 +1,6 @@
 "use client";
 
+import { Eye, EyeOff, ShieldCheck, ShieldAlert } from "lucide-react";
 import type { SubmissionIdentityRevealResponse } from "../lib/api";
 
 interface SubmissionIdentityPanelProps {
@@ -29,19 +30,21 @@ export function SubmissionIdentityPanel({
     return (
       <div className="identity-card">
         <div className="toolbar-row">
-          <span className="status-pill tone-success">Identity revealed</span>
+          <span className="status-pill tone-success">
+            <ShieldCheck size={12} /> Identity Revealed
+          </span>
           {onHide ? (
             <button className="secondary-button button-compact" onClick={onHide} type="button">
-              Hide identity
+              <EyeOff size={13} /> Hide
             </button>
           ) : null}
         </div>
         <div className="identity-list">
           <p><strong>Name:</strong> {revealedIdentity.studentName}</p>
-          <p><strong>Student number:</strong> {revealedIdentity.studentNumber ?? "Not provided"}</p>
+          <p><strong>Student Number:</strong> {revealedIdentity.studentNumber ?? "Not provided"}</p>
           <p><strong>Email:</strong> {revealedIdentity.studentEmail ?? "Not provided"}</p>
           {revealedIdentity.assignmentKey ? (
-            <p><strong>Assignment keyID:</strong> {revealedIdentity.assignmentKey}</p>
+            <p><strong>Assignment Key:</strong> <span className="mono">{revealedIdentity.assignmentKey}</span></p>
           ) : null}
         </div>
       </div>
@@ -51,7 +54,7 @@ export function SubmissionIdentityPanel({
   if (!identityRevealMode) {
     return (
       <div className="surface-soft">
-        <p className="secondary-text">Identity is not available for this submission.</p>
+        <p className="secondary-text">No identity information available for this submission.</p>
       </div>
     );
   }
@@ -59,7 +62,9 @@ export function SubmissionIdentityPanel({
   return (
     <div className="identity-card">
       <div className="toolbar-row">
-        <span className="status-pill tone-warning">Identity hidden</span>
+        <span className="status-pill tone-warning">
+          <ShieldAlert size={12} /> Identity Hidden
+        </span>
         {onReveal ? (
           <button
             className="secondary-button button-compact"
@@ -67,20 +72,21 @@ export function SubmissionIdentityPanel({
             onClick={onReveal}
             type="button"
           >
-            {isRevealPending ? "Revealing..." : "Reveal identity"}
+            <Eye size={13} />
+            {isRevealPending ? "Revealing..." : "Reveal Identity"}
           </button>
         ) : null}
       </div>
       {revealError ? (
         <div className="error-panel">
-          <strong>Reveal failed</strong>
+          <strong>Could not reveal identity</strong>
           <p>{revealError}</p>
         </div>
       ) : null}
       <p className="secondary-text">
         {identityRevealMode === "encrypted"
-          ? "This submission stores an encrypted identity that can only be revealed in the professor workflow."
-          : "This bulk-created submission reveals the sanitized child zip filename stem as the student name."}
+          ? "This student's identity is encrypted. Only authorized instructors can decrypt and view it."
+          : "This submission was created via batch upload. The filename is used as the visible name."}
       </p>
     </div>
   );

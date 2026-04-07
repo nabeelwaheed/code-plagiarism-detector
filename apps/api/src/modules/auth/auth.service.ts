@@ -65,6 +65,10 @@ export class AuthService {
         email: normalizedEmail,
         passwordHash: await hashPassword(password),
         role: "PROFESSOR",
+        firstName: payload.firstName?.trim() || null,
+        lastName: payload.lastName?.trim() || null,
+        title: payload.title?.trim() || null,
+        department: payload.department?.trim() || null,
       },
       select: { id: true, email: true, role: true },
     });

@@ -53,6 +53,10 @@ model User {
   email          String       @unique
   passwordHash   String
   role           UserRole
+  firstName      String?
+  lastName       String?
+  title          String?
+  department     String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   assignments    Assignment[]

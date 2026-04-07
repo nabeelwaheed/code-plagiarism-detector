@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState } from "react";
+import { CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
 
 type ToastTone = "info" | "success" | "warning" | "error";
 
@@ -79,16 +80,16 @@ export function useToast() {
 
 function getToastIcon(tone: ToastTone) {
   if (tone === "success") {
-    return "✓";
+    return <CheckCircle2 size={16} />;
   }
 
   if (tone === "warning") {
-    return "!";
+    return <AlertTriangle size={16} />;
   }
 
   if (tone === "error") {
-    return "×";
+    return <XCircle size={16} />;
   }
 
-  return "i";
+  return <Info size={16} />;
 }

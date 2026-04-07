@@ -1,0 +1,11 @@
+services:
+  api:
+    ports:
+      - "3001:3001"
+
+  web:
+    ports:
+      - "3000:3000"
+
+  caddy:
+    profiles: ["prod"]

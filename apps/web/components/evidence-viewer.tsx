@@ -4,6 +4,7 @@ import Editor from "@monaco-editor/react";
 import type { ViewerMatch } from "@similarity/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { spansOverlap } from "../lib/view-models";
 import {
   byteOffsetToEditorPosition,
@@ -66,15 +67,6 @@ export function EvidenceViewer({
     });
     return colorMap;
   }, [orderedMatches]);
-
-  const codeMatches = useMemo(
-    () => orderedMatches.filter((match) => match.kind === "code"),
-    [orderedMatches],
-  );
-  const commentMatches = useMemo(
-    () => orderedMatches.filter((match) => match.kind === "comment"),
-    [orderedMatches],
-  );
 
   const leftFilesWithCounts = useMemo(
     () =>
@@ -264,29 +256,54 @@ export function EvidenceViewer({
       <style>{dynamicStyles}</style>
       <div className="comparison-toolbar">
         <div className="stack-xs">
-          <strong>Match navigation</strong>
+          <strong>Match Navigation</strong>
           <span className="helper-text">
-            Use buttons, chips, or highlighted spans to move through paired evidence.
+            Move through each flagged overlap in sequence, or click any highlighted region directly inside the code panes.
           </span>
         </div>
-        <div className="match-navigator">
-          <button className="secondary-button button-compact" type="button" onClick={() => stepMatch("previous")}>
-            Prev
-          </button>
-          <span className="status-pill tone-neutral">
-            {orderedMatches.length === 0 ? "0 / 0" : `${activeMatchIndex + 1} / ${orderedMatches.length}`}
-          </span>
-          <button className="secondary-button button-compact" type="button" onClick={() => stepMatch("next")}>
-            Next
-          </button>
-        </div>
-      </div>
+        <div className="match-browser">
+          <div className="match-navigator">
+            <button className="secondary-button button-compact" type="button" onClick={() => stepMatch("previous")}>
+              <ChevronLeft size={14} /> Prev
+            </button>
+            <div className="match-current">
+              <span className="match-current-label">Active Match</span>
+              <strong>{orderedMatches.length === 0 ? "No matches" : `Match ${activeMatchIndex + 1}`}</strong>
+              <span className="helper-text">
+                {orderedMatches.length === 0
+                  ? "No overlapping evidence"
+                  : `${orderedMatches[activeMatchIndex]?.matchedTokenCount ?? 0} tokens`}
+              </span>
+            </div>
+            <button className="secondary-button button-compact" type="button" onClick={() => stepMatch("next")}>
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
 
-      <div className="match-chip-row">
-        {codeMatches.map((match, index) => renderMatchChip(match, index, activeMatchId, colors, revealMatch))}
-        {commentMatches.map((match, index) =>
-          renderMatchChip(match, index, activeMatchId, colors, revealMatch, "Comment"),
-        )}
+          <div className="match-rail" role="tablist" aria-label="Match navigation">
+            {orderedMatches.map((match, index) => {
+              const active = activeMatchId === match.matchId;
+              const color = colors.get(match.matchId) ?? "#aa0000";
+              return (
+                <button
+                  aria-selected={active}
+                  className={`match-nav-pill ${active ? "is-active" : ""}`}
+                  key={match.matchId}
+                  onClick={() => revealMatch(match.matchId)}
+                  role="tab"
+                  style={{
+                    borderColor: active ? color : undefined,
+                    boxShadow: active ? `inset 0 0 0 1px ${color}` : undefined,
+                  }}
+                  type="button"
+                >
+                  <span className="legend-swatch" style={{ background: color }} />
+                  <span>Match {index + 1}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <div className="comparison-grid">
@@ -294,7 +311,7 @@ export function EvidenceViewer({
           <div className="code-pane-header">
             <strong>{leftTitle}</strong>
             <span className="helper-text">
-              {leftLabel} · file-aware navigation stays aligned with byte spans
+              {leftLabel} · matched regions are highlighted
             </span>
           </div>
           <div className="file-tabs">
@@ -327,7 +344,7 @@ export function EvidenceViewer({
           <div className="code-pane-header">
             <strong>{rightTitle}</strong>
             <span className="helper-text">
-              {rightLabel} · active matches keep the same color on both sides
+              {rightLabel} · colors match across both sides
             </span>
           </div>
           <div className="file-tabs">
@@ -371,35 +388,6 @@ const editorOptions: Monaco.editor.IStandaloneEditorConstructionOptions = {
   wordWrap: "off",
 };
 
-function renderMatchChip(
-  match: ViewerMatch,
-  index: number,
-  activeMatchId: string | null,
-  colors: Map<string, string>,
-  revealMatch: (matchId: string) => void,
-  labelPrefix?: string,
-) {
-  const color = colors.get(match.matchId) ?? "#aa0000";
-  const active = activeMatchId === match.matchId;
-  const prefix = labelPrefix ?? (match.kind === "comment" ? "Comment" : "Code");
-
-  return (
-    <button
-      className={`match-chip ${active ? "is-active" : ""}`}
-      key={match.matchId}
-      type="button"
-      onClick={() => revealMatch(match.matchId)}
-      style={{
-        borderColor: active ? color : undefined,
-        background: active ? hexToTransparentFill(color, 0.12) : undefined,
-      }}
-    >
-      <span className="legend-swatch" style={{ background: color }} />
-      {prefix} {index + 1}
-    </button>
-  );
-}
-
 function buildDecoration(
   monaco: typeof Monaco,
   source: string,
@@ -423,13 +411,13 @@ function ensureReviewerTheme(monaco: typeof Monaco) {
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": "#ffffff",
-      "editor.lineHighlightBackground": "#f8fafc",
-      "editorGutter.background": "#f8fafc",
-      "editorLineNumber.foreground": "#94a3b8",
-      "editorLineNumber.activeForeground": "#475569",
-      "editor.selectionBackground": "rgba(170,0,0,0.10)",
-      "editor.inactiveSelectionBackground": "rgba(170,0,0,0.06)",
+      "editor.background": "#fffdf8",
+      "editor.lineHighlightBackground": "#f7f1e7",
+      "editorGutter.background": "#f7f1e7",
+      "editorLineNumber.foreground": "#8b8174",
+      "editorLineNumber.activeForeground": "#59606b",
+      "editor.selectionBackground": "rgba(47,107,96,0.12)",
+      "editor.inactiveSelectionBackground": "rgba(47,107,96,0.08)",
     },
   });
 }
