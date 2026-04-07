@@ -1,4 +1,9 @@
 import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+loadEnvFromKnownLocations();
 
 export interface WorkerRuntimeConfig {
   nodeEnv: string;
@@ -54,6 +59,22 @@ function getObjectStorageRoot(isProduction: boolean) {
   }
 
   return resolve(process.cwd(), "var", "object-storage");
+}
+
+function loadEnvFromKnownLocations() {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(process.cwd(), ".env"),
+    resolve(process.cwd(), "..", "..", ".env"),
+    resolve(currentDir, "../../../../.env"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      process.loadEnvFile?.(candidate);
+      return;
+    }
+  }
 }
 
 function getEngineBinaryPath(isProduction: boolean) {

@@ -7,9 +7,5 @@ export default async function ProfessorPage({
 }) {
   const params = await searchParams;
 
-  return (
-    <main className="page-shell">
-      <ProfessorDashboard successMessage={params?.message ?? null} />
-    </main>
-  );
+  return <ProfessorDashboard successMessage={params?.message ?? null} />;
 }

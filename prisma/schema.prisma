@@ -51,6 +51,10 @@ enum MatchKind {
 model User {
   id             String       @id @default(cuid())
   email          String       @unique
+  firstName      String?
+  lastName       String?
+  title          String?
+  department     String?
   passwordHash   String
   role           UserRole
   createdAt      DateTime     @default(now())

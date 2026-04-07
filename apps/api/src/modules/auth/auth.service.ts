@@ -29,7 +29,16 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
-      select: { id: true, email: true, passwordHash: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        title: true,
+        department: true,
+        passwordHash: true,
+        role: true,
+      },
     });
 
     if (!user || !(await verifyPassword(payload.password, user.passwordHash))) {
@@ -42,6 +51,10 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       role: user.role.toLowerCase(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      title: user.title,
+      department: user.department,
       session,
     };
   }
@@ -49,6 +62,10 @@ export class AuthService {
   async signupProfessor(payload: ProfessorSignupDto) {
     const normalizedEmail = normalizeEmail(payload.email);
     const password = payload.password.trim();
+    const firstName = normalizeOptionalProfileField(payload.firstName);
+    const lastName = normalizeOptionalProfileField(payload.lastName);
+    const title = normalizeOptionalProfileField(payload.title);
+    const department = normalizeOptionalProfileField(payload.department);
 
     if (!normalizedEmail) {
       throw new BadRequestException("Email is required");
@@ -70,10 +87,22 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: {
         email: normalizedEmail,
+        firstName,
+        lastName,
+        title,
+        department,
         passwordHash: await hashPassword(password),
         role: "PROFESSOR",
       },
-      select: { id: true, email: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        title: true,
+        department: true,
+        role: true,
+      },
     });
 
     const session = await this.sessionService.createSession(user.id);
@@ -82,6 +111,10 @@ export class AuthService {
       userId: user.id,
       email: user.email,
       role: user.role.toLowerCase(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      title: user.title,
+      department: user.department,
       session,
     };
   }
@@ -89,13 +122,25 @@ export class AuthService {
   async getCurrentUser(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, email: true, role: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        title: true,
+        department: true,
+        role: true,
+      },
     });
 
     return {
       userId: user.id,
       email: user.email,
       role: user.role.toLowerCase(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      title: user.title,
+      department: user.department,
     };
   }
 
@@ -199,4 +244,9 @@ export class AuthService {
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
+}
+
+function normalizeOptionalProfileField(value?: string | null) {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }

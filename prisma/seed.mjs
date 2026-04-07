@@ -7,11 +7,19 @@ async function main() {
   const professor = await prisma.user.upsert({
     where: { email: "professor@example.com" },
     update: {
+      firstName: "Demo",
+      lastName: "Professor",
+      title: "Professor",
+      department: "Computer Science",
       passwordHash: hashPassword("professor123"),
       role: UserRole.PROFESSOR,
     },
     create: {
       email: "professor@example.com",
+      firstName: "Demo",
+      lastName: "Professor",
+      title: "Professor",
+      department: "Computer Science",
       passwordHash: hashPassword("professor123"),
       role: UserRole.PROFESSOR,
     },

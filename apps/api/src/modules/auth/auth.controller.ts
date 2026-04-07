@@ -26,6 +26,10 @@ export class AuthController {
       userId: result.userId,
       email: result.email,
       role: result.role,
+      firstName: result.firstName,
+      lastName: result.lastName,
+      title: result.title,
+      department: result.department,
       expiresAt: result.session.expiresAt,
     };
   }
@@ -43,6 +47,10 @@ export class AuthController {
       userId: result.userId,
       email: result.email,
       role: result.role,
+      firstName: result.firstName,
+      lastName: result.lastName,
+      title: result.title,
+      department: result.department,
       expiresAt: result.session.expiresAt,
     };
   }
@@ -68,6 +76,10 @@ export class AuthController {
       userId: user.id,
       email: user.email,
       role: user.role,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      title: user.title,
+      department: user.department,
     };
   }
 

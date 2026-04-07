@@ -2,7 +2,7 @@ import { ProfessorSettingsPanel } from "../../../components/professor-settings-p
 
 export default function ProfessorSettingsPage() {
   return (
-    <main className="page-shell">
+    <main className="main-content">
       <ProfessorSettingsPanel />
     </main>
   );

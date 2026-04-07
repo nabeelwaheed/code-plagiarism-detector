@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { LoginForm } from "../../components/login-form";
 
 export default async function LoginPage({
@@ -9,28 +8,12 @@ export default async function LoginPage({
   const params = await searchParams;
 
   return (
-    <main className="page-shell narrow-shell">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">Professor Access</p>
-          <h1>Professor sign in</h1>
-          <p>
-            Sign in to manage assignments, upload historical and template material, and review
-            suspicious pairs. Student submission is now available from the public landing page.
-          </p>
-          <p className="muted-text">
-            Need an account?{" "}
-            <Link className="text-link" href="/signup">
-              Create a professor account
-            </Link>
-          </p>
+    <main style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "2rem 1rem" }}>
+      {params?.message === "account-deleted" && (
+        <div className="alert alert-info" style={{ maxWidth: 420, margin: "0 auto 1rem" }}>
+          Your professor account was deleted successfully.
         </div>
-      </section>
-      {params?.message === "account-deleted" ? (
-        <div className="alert alert-info">
-          <p>Your professor account was deleted successfully.</p>
-        </div>
-      ) : null}
+      )}
       <LoginForm />
     </main>
   );

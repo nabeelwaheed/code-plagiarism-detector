@@ -1,4 +1,9 @@
 import { generateKeyPairSync } from "node:crypto";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+loadEnvFromKnownLocations();
 
 const DEFAULT_DEV_CORS_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"];
 
@@ -98,6 +103,22 @@ function getCorsAllowedOrigins(isProduction: boolean) {
   }
 
   return rawValue.split(",").map((value) => value.trim()).filter(Boolean);
+}
+
+function loadEnvFromKnownLocations() {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(process.cwd(), ".env"),
+    resolve(process.cwd(), "..", "..", ".env"),
+    resolve(currentDir, "../../../../.env"),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      process.loadEnvFile?.(candidate);
+      return;
+    }
+  }
 }
 
 function getRequiredEnv(name: string) {

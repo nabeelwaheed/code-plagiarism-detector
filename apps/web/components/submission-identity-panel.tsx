@@ -27,50 +27,67 @@ export function SubmissionIdentityPanel({
 
   if (revealedIdentity) {
     return (
-      <div className="stack-sm">
-        <div className="toolbar-row">
-          {onHide ? (
-            <button className="secondary-button" onClick={onHide} type="button">
-              Hide identity
-            </button>
-          ) : null}
-        </div>
-        <div className="surface-muted stack-sm">
-          <strong>Revealed identity</strong>
-          <p>Name: {revealedIdentity.studentName}</p>
-          <p>Student number: {revealedIdentity.studentNumber ?? "Not provided"}</p>
-          <p>Email: {revealedIdentity.studentEmail ?? "Not provided"}</p>
-          {revealedIdentity.assignmentKey ? (
-            <p>Assignment keyID: {revealedIdentity.assignmentKey}</p>
-          ) : null}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+        {onHide && (
+          <button className="btn btn-outline btn-sm" onClick={onHide} type="button">
+            Hide identity
+          </button>
+        )}
+        <div
+          style={{
+            padding: "0.75rem",
+            background: "var(--bg-surface-raised)",
+            borderRadius: "var(--radius-md)",
+            border: "1px solid var(--border-subtle)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.35rem",
+            fontSize: "0.85rem",
+          }}
+        >
+          <strong style={{ fontSize: "0.82rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            Revealed Identity
+          </strong>
+          <p style={{ margin: 0 }}>Name: <strong>{revealedIdentity.studentName}</strong></p>
+          <p style={{ margin: 0 }}>Student #: <strong>{revealedIdentity.studentNumber ?? "Not provided"}</strong></p>
+          <p style={{ margin: 0 }}>Email: <strong>{revealedIdentity.studentEmail ?? "Not provided"}</strong></p>
+          {revealedIdentity.assignmentKey && (
+            <p style={{ margin: 0, fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-tertiary)" }}>
+              Key: {revealedIdentity.assignmentKey}
+            </p>
+          )}
         </div>
       </div>
     );
   }
 
   if (!identityRevealMode) {
-    return <p className="muted-text">Identity is not available for this submission.</p>;
+    return (
+      <p style={{ fontSize: "0.82rem", color: "var(--text-tertiary)", margin: 0 }}>
+        Identity is not available for this submission.
+      </p>
+    );
   }
 
   return (
-    <div className="stack-sm">
-      <div className="toolbar-row">
-        {onReveal ? (
-          <button
-            className="secondary-button"
-            disabled={isRevealPending}
-            onClick={onReveal}
-            type="button"
-          >
-            {isRevealPending ? "Revealing..." : "Reveal identity"}
-          </button>
-        ) : null}
-      </div>
-      {revealError ? <p className="error-text">{revealError}</p> : null}
-      <p className="muted-text">
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      {onReveal && (
+        <button
+          className="btn btn-outline btn-sm"
+          disabled={isRevealPending}
+          onClick={onReveal}
+          type="button"
+        >
+          {isRevealPending ? "Revealing..." : "Reveal Identity"}
+        </button>
+      )}
+      {revealError && (
+        <p style={{ fontSize: "0.82rem", color: "var(--accent-red)", margin: 0 }}>{revealError}</p>
+      )}
+      <p style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", margin: 0, lineHeight: 1.5 }}>
         {identityRevealMode === "encrypted"
-          ? "This submission stores an encrypted identity that can be revealed only in the professor workflow."
-          : "This bulk testing submission reveals the sanitized child zip filename stem as the student name."}
+          ? "This submission stores an encrypted identity that can be revealed by the professor."
+          : "This submission reveals the sanitized filename stem as the student name."}
       </p>
     </div>
   );
