@@ -7,9 +7,5 @@ export default async function AssignmentPage({
 }) {
   const { assignmentId } = await params;
 
-  return (
-    <main className="page-shell">
-      <AssignmentWorkspace assignmentId={assignmentId} />
-    </main>
-  );
+  return <AssignmentWorkspace assignmentId={assignmentId} />;
 }

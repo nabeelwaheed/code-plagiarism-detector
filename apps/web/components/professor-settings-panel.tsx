@@ -4,35 +4,35 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { ArrowLeft, Lock, ShieldAlert, User } from "lucide-react";
 import { changePassword, deleteOwnAccount } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
+import { ConfirmModal } from "./confirm-modal";
+import { useToast } from "./toast";
 
 export function ProfessorSettingsPanel() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const currentUserQuery = useCurrentUserQuery();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
-  const [deleteLocalError, setDeleteLocalError] = useState<string | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const session = currentUserQuery.data ?? null;
 
   const changePasswordMutation = useMutation({
-    mutationFn: () =>
-      changePassword({
-        currentPassword,
-        newPassword,
-      }),
+    mutationFn: () => changePassword({ currentPassword, newPassword }),
     onSuccess: () => {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setLocalError(null);
-      setSuccessMessage("Password updated successfully.");
+      showToast("Password updated successfully.", "success");
+    },
+    onError: (err: Error) => {
+      showToast(err.message, "error");
     },
   });
 
@@ -42,182 +42,165 @@ export function ProfessorSettingsPanel() {
       await queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       router.replace("/login?message=account-deleted");
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSuccessMessage(null);
-
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
       setLocalError("Please complete all password fields.");
       return;
     }
-
     if (newPassword !== confirmPassword) {
       setLocalError("New password and confirmation must match.");
       return;
     }
-
     setLocalError(null);
     changePasswordMutation.mutate();
   };
 
-  const handleDeleteAccount = () => {
-    setDeleteLocalError(null);
-
-    if (deleteConfirmationText.trim() !== "DELETE") {
-      setDeleteLocalError('Type "DELETE" to confirm account deletion.');
-      return;
-    }
-
-    deleteAccountMutation.mutate();
-  };
-
   if (!session) {
-    return <p className="panel">Sign in as a professor to manage account settings.</p>;
+    return <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>Sign in as a professor to manage account settings.</div>;
   }
 
   if (session.role !== "professor") {
-    return <p className="panel">Only professor accounts can manage these settings.</p>;
+    return <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>Only professor accounts can manage these settings.</div>;
   }
 
   return (
-    <div className="page-stack">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">Account settings</p>
-          <h1>Professor account</h1>
-          <p className="subtle-text">Review your email and change your password.</p>
-        </div>
-        <div className="toolbar-row">
-          <Link className="secondary-button as-link" href="/professor">
-            Back to professor home
+    <>
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        title="Delete Account"
+        message="This permanently removes your professor access, owned assignments, related uploads, and all comparison data. This cannot be undone."
+        confirmLabel="Delete Account"
+        danger
+        onConfirm={() => { setConfirmDeleteOpen(false); deleteAccountMutation.mutate(); }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
+
+      {/* Page layout */}
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "1.5rem 1rem 3rem", width: "100%" }}>
+        <div style={{ marginBottom: "1.5rem" }}>
+          <Link
+            href="/professor"
+            className="btn btn-ghost btn-sm"
+            style={{ padding: "0.25rem 0.5rem", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "0.4rem", textDecoration: "none" }}
+          >
+            <ArrowLeft size={14} /> Back to Dashboard
           </Link>
         </div>
-      </section>
 
-      <section className="panel">
-        <div className="stack-sm">
-          <h2>Email</h2>
-          <p className="subtle-text">{session.email}</p>
-        </div>
-      </section>
+        <h1 style={{ fontSize: "1.4rem", marginBottom: "0.25rem" }}>Account Settings</h1>
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.88rem", marginBottom: "1.75rem" }}>
+          Manage your professor account, credentials, and account deletion.
+        </p>
 
-      <section className="panel">
-        <h2>Change password</h2>
-        <form className="form-stack form-compact" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>Current password</span>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>New password</span>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Confirm new password</span>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-            />
-          </label>
-          <button
-            className="primary-button"
-            disabled={changePasswordMutation.isPending}
-            type="submit"
-          >
-            {changePasswordMutation.isPending ? "Saving..." : "Change password"}
-          </button>
-          {localError ? <p className="error-text">{localError}</p> : null}
-          {changePasswordMutation.error ? (
-            <p className="error-text">{changePasswordMutation.error.message}</p>
-          ) : null}
-          {successMessage ? (
-            <div className="alert alert-info">
-              <p>{successMessage}</p>
-            </div>
-          ) : null}
-        </form>
-      </section>
-
-      <section className="panel">
-        <div className="stack-sm">
-          <div>
-            <p className="eyebrow">Danger zone</p>
-            <h2>Delete account</h2>
-          </div>
-          <p className="subtle-text">
-            Deleting your account permanently removes your professor access, owned assignments,
-            related uploads, and comparison data.
-          </p>
-
-          {!isDeleteConfirmOpen ? (
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                setSuccessMessage(null);
-                setDeleteLocalError(null);
-                setDeleteConfirmationText("");
-                setIsDeleteConfirmOpen(true);
+        {/* Profile info */}
+        <div className="glass-card" style={{ padding: "1.25rem", marginBottom: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                background: "var(--brand-soft)",
+                border: "1px solid var(--brand)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              Delete account
-            </button>
-          ) : (
-            <div className="surface-muted stack-sm">
-              <p>
-                <strong>Are you sure you want to delete your account?</strong>
-              </p>
-              <p className="muted-text">
-                This cannot be undone. Type <strong>DELETE</strong> to confirm.
-              </p>
-              <label className="field">
-                <span>Confirmation text</span>
-                <input
-                  value={deleteConfirmationText}
-                  onChange={(event) => setDeleteConfirmationText(event.target.value)}
-                  placeholder="DELETE"
-                />
-              </label>
-              <div className="toolbar-row">
-                <button
-                  className="secondary-button"
-                  type="button"
-                  onClick={() => {
-                    setIsDeleteConfirmOpen(false);
-                    setDeleteConfirmationText("");
-                    setDeleteLocalError(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="secondary-button"
-                  disabled={deleteAccountMutation.isPending}
-                  type="button"
-                  onClick={handleDeleteAccount}
-                >
-                  {deleteAccountMutation.isPending ? "Deleting..." : "Delete account permanently"}
-                </button>
-              </div>
-              {deleteLocalError ? <p className="error-text">{deleteLocalError}</p> : null}
-              {deleteAccountMutation.error ? (
-                <p className="error-text">{deleteAccountMutation.error.message}</p>
-              ) : null}
+              <User size={18} color="var(--brand)" />
             </div>
-          )}
+            <div>
+              <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>{session.email}</div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                Professor Account
+              </div>
+            </div>
+          </div>
         </div>
-      </section>
-    </div>
+
+        {/* Change password */}
+        <div className="glass-card" style={{ padding: "1.25rem", marginBottom: "1rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
+            <Lock size={16} color="var(--text-secondary)" />
+            <h2 style={{ fontSize: "1rem", margin: 0 }}>Change Password</h2>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="s-cur-pw">Current Password</label>
+              <input
+                id="s-cur-pw"
+                className="form-input"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="s-new-pw">New Password</label>
+              <input
+                id="s-new-pw"
+                className="form-input"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Choose a new password"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="s-confirm-pw">Confirm New Password</label>
+              <input
+                id="s-confirm-pw"
+                className="form-input"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repeat new password"
+              />
+            </div>
+
+            {localError && <div className="alert alert-error">{localError}</div>}
+            {changePasswordMutation.error && (
+              <div className="alert alert-error">{changePasswordMutation.error.message}</div>
+            )}
+
+            <button
+              className="btn btn-primary"
+              disabled={changePasswordMutation.isPending}
+              type="submit"
+            >
+              {changePasswordMutation.isPending ? "Saving..." : "Update Password"}
+            </button>
+          </form>
+        </div>
+
+        {/* Danger zone */}
+        <div
+          className="glass-card"
+          style={{ padding: "1.25rem", borderColor: "rgba(220,38,38,0.25)" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+            <ShieldAlert size={16} color="var(--accent-red)" />
+            <h2 style={{ fontSize: "1rem", margin: 0, color: "var(--accent-red)" }}>Danger Zone</h2>
+          </div>
+          <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+            Deleting your account permanently removes your professor access, all owned assignments,
+            uploads, and comparison data.
+          </p>
+          <button
+            className="btn btn-danger btn-sm"
+            disabled={deleteAccountMutation.isPending}
+            onClick={() => setConfirmDeleteOpen(true)}
+          >
+            {deleteAccountMutation.isPending ? "Deleting..." : "Delete Account"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }

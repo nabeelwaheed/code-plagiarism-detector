@@ -7,9 +7,5 @@ export default async function PairViewerPage({
 }) {
   const { pairId } = await params;
 
-  return (
-    <main className="page-shell">
-      <PairViewerPanel pairId={pairId} />
-    </main>
-  );
+  return <PairViewerPanel pairId={pairId} />;
 }

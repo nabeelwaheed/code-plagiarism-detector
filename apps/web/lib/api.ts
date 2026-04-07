@@ -14,6 +14,10 @@ export interface LoginResponse {
   userId: string;
   email: string;
   role: "professor" | "student";
+  firstName?: string | null;
+  lastName?: string | null;
+  title?: string | null;
+  department?: string | null;
   expiresAt: string;
 }
 
@@ -308,10 +312,17 @@ export function login(email: string, password: string) {
   });
 }
 
-export function signupProfessor(email: string, password: string) {
+export function signupProfessor(input: {
+  email: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  title?: string;
+  department?: string;
+}) {
   return apiFetch<LoginResponse>("/auth/professor-signup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(input),
   });
 }
 
@@ -448,6 +459,10 @@ export function getCurrentUser() {
     userId: string;
     email: string;
     role: "professor" | "student";
+    firstName?: string | null;
+    lastName?: string | null;
+    title?: string | null;
+    department?: string | null;
   }>("/auth/me");
 }
 

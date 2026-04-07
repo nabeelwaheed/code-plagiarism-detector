@@ -38,6 +38,10 @@ export class SessionService {
           select: {
             id: true,
             email: true,
+            firstName: true,
+            lastName: true,
+            title: true,
+            department: true,
             role: true,
           },
         },
@@ -62,6 +66,10 @@ export class SessionService {
         id: session.user.id,
         email: session.user.email,
         role: session.user.role.toLowerCase() as AuthenticatedUser["role"],
+        firstName: session.user.firstName,
+        lastName: session.user.lastName,
+        title: session.user.title,
+        department: session.user.department,
       },
     };
   }

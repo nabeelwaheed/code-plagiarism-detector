@@ -4,6 +4,95 @@ import { BadRequestException } from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { hashPassword, verifyPassword } from "./password.service.js";
 
+test("signupProfessor persists trimmed profile fields", async () => {
+  let createdUserData: {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    title: string | null;
+    department: string | null;
+    passwordHash: string;
+    role: string;
+  } | null = null;
+
+  const prisma = {
+    user: {
+      findUnique: async () => null,
+      create: async ({
+        data,
+      }: {
+        data: {
+          email: string;
+          firstName: string | null;
+          lastName: string | null;
+          title: string | null;
+          department: string | null;
+          passwordHash: string;
+          role: string;
+        };
+      }) => {
+        createdUserData = data;
+        return {
+          id: "user-1",
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          title: data.title,
+          department: data.department,
+          role: "PROFESSOR",
+        };
+      },
+    },
+  };
+
+  const authService = new AuthService(prisma as never, {
+    createSession: async () => ({
+      sessionId: "session-1",
+      rawToken: "raw-token",
+      expiresAt: new Date("2026-04-07T12:00:00.000Z"),
+    }),
+  } as never);
+
+  const result = await authService.signupProfessor({
+    email: " Professor@Example.com ",
+    password: "StrongPass123!",
+    firstName: "  Sarah ",
+    lastName: " Chen  ",
+    title: "  Professor ",
+    department: "   ",
+  });
+
+  if (!createdUserData) {
+    throw new Error("Expected signupProfessor to create a user");
+  }
+
+  const persistedUserData: {
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    title: string | null;
+    department: string | null;
+    passwordHash: string;
+    role: string;
+  } = createdUserData;
+
+  assert.deepEqual(persistedUserData, {
+    email: "professor@example.com",
+    firstName: "Sarah",
+    lastName: "Chen",
+    title: "Professor",
+    department: null,
+    passwordHash: persistedUserData.passwordHash,
+    role: "PROFESSOR",
+  });
+  assert.equal(typeof persistedUserData.passwordHash, "string");
+  assert.notEqual(persistedUserData.passwordHash, "StrongPass123!");
+  assert.equal(result.firstName, "Sarah");
+  assert.equal(result.lastName, "Chen");
+  assert.equal(result.title, "Professor");
+  assert.equal(result.department, null);
+});
+
 test("changePassword rejects an incorrect current password", async () => {
   const storedHash = await hashPassword("professor123");
   const prisma = {

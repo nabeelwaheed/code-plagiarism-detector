@@ -5,6 +5,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Database,
+  Download,
+  Eye,
+  FileArchive,
+  FileCode,
+  Key,
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Play,
+  Trash2,
+  Upload,
+  Users,
+} from "lucide-react";
+import {
   createComparisonRun,
   deleteAssignment,
   deleteAssignmentCategory,
@@ -24,6 +44,10 @@ import {
 } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
 import { SubmissionIdentityPanel } from "./submission-identity-panel";
+import { ConfirmModal } from "./confirm-modal";
+import { useToast } from "./toast";
+
+type WorkspaceTab = "submissions" | "pairs" | "uploads" | "danger";
 
 type SelectedArtifact =
   | { type: "submission"; id: string }
@@ -35,22 +59,26 @@ const CODE_SUSPICIOUS_THRESHOLD = 0.35;
 export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
+
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("submissions");
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [trackedUploadBatchId, setTrackedUploadBatchId] = useState<string | null>(null);
-  const [activeWorkspaceView, setActiveWorkspaceView] = useState<"submissions" | "pairs">(
-    "submissions",
-  );
-  const [activePairCategory, setActivePairCategory] = useState<
-    "current-current" | "current-historical"
-  >("current-current");
+  const [activePairCategory, setActivePairCategory] = useState<"current-current" | "current-historical">("current-current");
   const [showAllPairs, setShowAllPairs] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
   const [revealedIdentity, setRevealedIdentity] = useState<SubmissionIdentityRevealResponse | null>(null);
-  const [dangerFeedback, setDangerFeedback] = useState<string | null>(null);
   const [dueDateInput, setDueDateInput] = useState("");
   const [isEditingDueDate, setIsEditingDueDate] = useState(false);
-  const [dueDateFeedback, setDueDateFeedback] = useState<string | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Delete confirm modals
+  const [confirmDeleteAssignment, setConfirmDeleteAssignment] = useState(false);
+  const [confirmDeleteSubmission, setConfirmDeleteSubmission] = useState<{ id: string; name: string } | null>(null);
+  const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<{ id: string; version: number } | null>(null);
+  const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<{ cat: "current" | "historical" | "template"; count: number } | null>(null);
+
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
 
@@ -73,79 +101,62 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const artifactDetailQuery = useQuery({
     queryKey: ["assignment-artifact", assignmentId, selectedArtifact?.type, selectedArtifact?.id],
     queryFn: () => {
-      if (!selectedArtifact) {
-        throw new Error("No artifact selected");
-      }
-
+      if (!selectedArtifact) throw new Error("No artifact selected");
       return selectedArtifact.type === "template"
         ? getAssignmentTemplateDetail(assignmentId, selectedArtifact.id)
         : getAssignmentSubmissionDetail(assignmentId, selectedArtifact.id);
     },
-    enabled: activeWorkspaceView === "submissions" && Boolean(selectedArtifact),
+    enabled: activeTab === "submissions" && Boolean(selectedArtifact),
   });
 
   const historicalUploadMutation = useMutation({
     mutationFn: () =>
-      uploadProfessorArchive({
-        assignmentId,
-        purpose: "historical_submission",
-        file: historicalFile!,
-      }),
+      uploadProfessorArchive({ assignmentId, purpose: "historical_submission", file: historicalFile! }),
     onSuccess: (batch) => {
       setTrackedUploadBatchId(batch.id);
       setHistoricalFile(null);
+      showToast("Historical archive uploaded. Processing...", "success");
       void queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] });
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
 
   const templateUploadMutation = useMutation({
     mutationFn: () =>
-      uploadProfessorArchive({
-        assignmentId,
-        purpose: "template_upload",
-        file: templateFile!,
-      }),
+      uploadProfessorArchive({ assignmentId, purpose: "template_upload", file: templateFile! }),
     onSuccess: (batch) => {
       setTrackedUploadBatchId(batch.id);
       setTemplateFile(null);
+      showToast("Template archive uploaded. Processing...", "success");
       void queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] });
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
 
   const rerunMutation = useMutation({
     mutationFn: () => createComparisonRun(assignmentId),
     onSuccess: () => {
+      showToast("Comparison run queued.", "success");
       void queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] });
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
 
   const downloadMutation = useMutation({
-    mutationFn: async (
-      input:
-        | { type: "all" }
-        | { type: "submission"; id: string }
-        | { type: "template"; id: string },
-    ) => {
-      if (input.type === "all") {
-        await downloadAllAssignmentSubmissions(assignmentId);
-        return;
-      }
-
-      if (input.type === "template") {
-        await downloadAssignmentTemplate(assignmentId, input.id);
-        return;
-      }
-
+    mutationFn: async (input: { type: "all" } | { type: "submission"; id: string } | { type: "template"; id: string }) => {
+      if (input.type === "all") { await downloadAllAssignmentSubmissions(assignmentId); return; }
+      if (input.type === "template") { await downloadAssignmentTemplate(assignmentId, input.id); return; }
       await downloadAssignmentSubmission(assignmentId, input.id);
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
 
   const revealIdentityMutation = useMutation({
     mutationFn: (submissionId: string) => revealAssignmentSubmissionIdentity(assignmentId, submissionId),
-    onSuccess: (identity) => {
-      setRevealedIdentity(identity);
-    },
+    onSuccess: (identity) => setRevealedIdentity(identity),
+    onError: (err: Error) => showToast(err.message, "error"),
   });
+
   const deleteAssignmentMutation = useMutation({
     mutationFn: () => deleteAssignment(assignmentId),
     onSuccess: async () => {
@@ -155,55 +166,65 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
       ]);
       router.push("/professor?message=assignment-deleted");
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
+
   const deleteSubmissionMutation = useMutation({
     mutationFn: (submissionId: string) => deleteAssignmentSubmission(assignmentId, submissionId),
     onSuccess: async () => {
-      setDangerFeedback("Historical submission deleted. Comparison results were cleared.");
       setSelectedArtifact(null);
       setRevealedIdentity(null);
       revealIdentityMutation.reset();
+      showToast("Submission deleted. Comparison data cleared.", "info");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["assignments"] }),
         queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
       ]);
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
+
   const deleteTemplateMutation = useMutation({
     mutationFn: (templateId: string) => deleteAssignmentTemplate(assignmentId, templateId),
     onSuccess: async () => {
-      setDangerFeedback("Template deleted. Comparison results were cleared.");
       setSelectedArtifact(null);
       setRevealedIdentity(null);
       revealIdentityMutation.reset();
+      showToast("Template deleted. Comparison data cleared.", "info");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["assignments"] }),
         queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
       ]);
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
+
   const deleteCategoryMutation = useMutation({
     mutationFn: (category: "current" | "historical" | "template") =>
       deleteAssignmentCategory(assignmentId, category),
     onSuccess: async (result, category) => {
-      setDangerFeedback(
-        result.deletedCount > 0
-          ? `Deleted ${result.deletedCount} ${category === "template" ? "template item" : category + " submission"}${result.deletedCount === 1 ? "" : "s"}. Comparison results were cleared.`
-          : `There were no ${category} items to delete.`,
-      );
       setSelectedArtifact(null);
       setRevealedIdentity(null);
       revealIdentityMutation.reset();
+      const label = category === "template" ? "template" : `${category} submission`;
+      showToast(
+        result.deletedCount > 0
+          ? `Deleted ${result.deletedCount} ${label}${result.deletedCount === 1 ? "" : "s"}. Comparison data cleared.`
+          : `No ${label}s to delete.`,
+        "info",
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["assignments"] }),
         queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
       ]);
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
+
   const updateDueDateMutation = useMutation({
     mutationFn: (nextDueDate: string | null) => updateAssignmentDueDate(assignmentId, nextDueDate),
     onSuccess: async (result) => {
-      setDueDateFeedback(result.dueDate ? "Due date updated." : "Due date cleared.");
+      showToast(result.dueDate ? "Due date updated." : "Due date cleared.", "success");
       setIsEditingDueDate(false);
       setDueDateInput(toDateTimeLocalInputValue(result.dueDate));
       await Promise.all([
@@ -211,6 +232,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
         queryClient.invalidateQueries({ queryKey: ["assignment", assignmentId] }),
       ]);
     },
+    onError: (err: Error) => showToast(err.message, "error"),
   });
 
   const latestVisibleRun = useMemo(
@@ -225,1010 +247,1125 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   useEffect(() => {
     setRevealedIdentity(null);
     revealIdentityMutation.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedArtifact?.id, selectedArtifact?.type]);
 
   useEffect(() => {
     setDueDateInput(toDateTimeLocalInputValue(assignmentQuery.data?.dueDate ?? null));
   }, [assignmentQuery.data?.dueDate]);
 
-  const handleHideIdentity = () => {
-    setRevealedIdentity(null);
-    revealIdentityMutation.reset();
-  };
-
-  const handleHistoricalSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!historicalFile || !session) {
-      return;
-    }
-    historicalUploadMutation.mutate();
-  };
-
-  const handleTemplateSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!templateFile || !session) {
-      return;
-    }
-    templateUploadMutation.mutate();
-  };
-
   if (!session) {
-    return <p className="panel">Sign in as a professor to open this assignment workspace.</p>;
+    return <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>Sign in as a professor to open this assignment workspace.</div>;
   }
 
   if (session.role !== "professor") {
-    return <p className="panel">Only professor accounts can view assignment workspaces.</p>;
+    return <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>Only professor accounts can view assignment workspaces.</div>;
   }
 
   if (assignmentQuery.isLoading) {
-    return <p className="panel">Loading assignment...</p>;
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "4rem", gap: "0.75rem", color: "var(--text-tertiary)" }}>
+        <Loader2 size={20} className="anim-spin" /> Loading assignment...
+      </div>
+    );
   }
 
   if (assignmentQuery.error || !assignmentQuery.data) {
     return (
-      <p className="panel error-text">
+      <div className="alert alert-error" style={{ margin: "2rem auto", maxWidth: 500 }}>
         {assignmentQuery.error?.message ?? "That assignment no longer exists."}
-      </p>
+      </div>
     );
   }
 
   const assignment = assignmentQuery.data;
-  const currentSubmissions = assignment.submissions.filter((item) => item.kind === "current");
-  const historicalSubmissions = assignment.submissions.filter((item) => item.kind === "historical");
+  const currentSubmissions = assignment.submissions.filter((s) => s.kind === "current");
+  const historicalSubmissions = assignment.submissions.filter((s) => s.kind === "historical");
   const templateVersions = assignment.templateVersions;
   const latestUpload = trackedUploadQuery.data ?? assignment.uploadBatches[0] ?? null;
+  const activeKey = assignment.keys[0]?.publicKey ?? null;
+
   const currentVsCurrentPairs = latestVisibleRun?.pairResults.filter(
-    (pair) => pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "current",
+    (p) => p.leftSubmission.kind === "current" && p.rightSubmission.kind === "current",
   ) ?? [];
   const currentVsHistoricalPairs = latestVisibleRun?.pairResults.filter(
-    (pair) =>
-      (pair.leftSubmission.kind === "current" && pair.rightSubmission.kind === "historical")
-      || (pair.leftSubmission.kind === "historical" && pair.rightSubmission.kind === "current"),
+    (p) =>
+      (p.leftSubmission.kind === "current" && p.rightSubmission.kind === "historical") ||
+      (p.leftSubmission.kind === "historical" && p.rightSubmission.kind === "current"),
   ) ?? [];
-  const visiblePairs =
-    activePairCategory === "current-current" ? currentVsCurrentPairs : currentVsHistoricalPairs;
+  const visiblePairs = activePairCategory === "current-current" ? currentVsCurrentPairs : currentVsHistoricalPairs;
   const sectionedPairs = partitionSuspiciousPairs(visiblePairs);
+
   const selectedArtifactKey = selectedArtifact ? `${selectedArtifact.type}:${selectedArtifact.id}` : null;
-  const hasActiveAssignmentJobs =
-    assignment.uploadBatches.some(
-      (batch) => batch.status === "received" || batch.status === "processing",
-    )
-    || assignment.comparisonRuns.some(
-      (run) => run.status === "queued" || run.status === "running",
-    );
-  const isDangerActionPending =
-    deleteAssignmentMutation.isPending
-    || deleteSubmissionMutation.isPending
-    || deleteTemplateMutation.isPending
-    || deleteCategoryMutation.isPending;
-  const destructiveError =
-    deleteAssignmentMutation.error?.message
-    ?? deleteSubmissionMutation.error?.message
-    ?? deleteTemplateMutation.error?.message
-    ?? deleteCategoryMutation.error?.message
-    ?? null;
+  const hasActiveJobs =
+    assignment.uploadBatches.some((b) => b.status === "received" || b.status === "processing") ||
+    assignment.comparisonRuns.some((r) => r.status === "queued" || r.status === "running");
+  const isDangerPending =
+    deleteAssignmentMutation.isPending ||
+    deleteSubmissionMutation.isPending ||
+    deleteTemplateMutation.isPending ||
+    deleteCategoryMutation.isPending;
 
-  const handleDeleteAssignment = () => {
-    setDangerFeedback(null);
-
-    const confirmation = window.prompt(
-      `Type DELETE to permanently remove "${assignment.title}" and all of its assignment data.`,
-      "",
-    );
-
-    if (confirmation !== "DELETE") {
-      return;
-    }
-
-    deleteAssignmentMutation.mutate();
-  };
-
-  const handleDeleteHistoricalSubmission = (submissionId: string, displayName: string) => {
-    setDangerFeedback(null);
-
-    const confirmed = window.confirm(
-      `Delete the historical submission "${displayName}"? This will also clear comparison results for this assignment.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    deleteSubmissionMutation.mutate(submissionId);
-  };
-
-  const handleDeleteTemplate = (templateId: string, versionNumber: number) => {
-    setDangerFeedback(null);
-
-    const confirmed = window.confirm(
-      `Delete template version ${versionNumber}? This will also clear comparison results for this assignment.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    deleteTemplateMutation.mutate(templateId);
-  };
-
-  const handleDeleteCategory = (
-    category: "current" | "historical" | "template",
-    count: number,
-  ) => {
-    setDangerFeedback(null);
-
-    const label = category === "template" ? "template item" : `${category} submission`;
-    const confirmed = window.confirm(
-      `Delete all ${count} ${label}${count === 1 ? "" : "s"} in this assignment? This will also clear comparison results for this assignment.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    deleteCategoryMutation.mutate(category);
-  };
-
-  const handleDueDateSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setDueDateFeedback(null);
-
-    const nextDueDate = dueDateInput.trim() ? new Date(dueDateInput) : null;
-    if (nextDueDate && Number.isNaN(nextDueDate.getTime())) {
-      setDueDateFeedback("Please provide a valid due date.");
-      return;
-    }
-
-    updateDueDateMutation.mutate(nextDueDate ? nextDueDate.toISOString() : null);
-  };
-
-  const handleClearDueDate = () => {
-    setDueDateFeedback(null);
-    updateDueDateMutation.mutate(null);
-  };
+  const tabs: { id: WorkspaceTab; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: "submissions", label: "Submissions", icon: <Users size={17} />, badge: currentSubmissions.length + historicalSubmissions.length },
+    { id: "pairs", label: "Suspicious Pairs", icon: <Database size={17} />, badge: sectionedPairs.totalCount },
+    { id: "uploads", label: "Uploads", icon: <Upload size={17} />, badge: assignment.uploadBatches.length },
+    { id: "danger", label: "Danger Zone", icon: <AlertTriangle size={17} /> },
+  ];
 
   return (
-    <div className="page-stack">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">Assignment workspace</p>
-          <h1>{assignment.title}</h1>
-          <p className="subtle-text">
-            Review uploads, files, and suspicious pairs for this {assignment.language.toUpperCase()} assignment.
-          </p>
-          <div className="toolbar-row">
-            <span className="status-badge is-active">{assignment.language.toUpperCase()}</span>
-            <span className="pill mono">{assignment.keys[0]?.publicKey ?? "No key yet"}</span>
-          </div>
-        </div>
+    <>
+      {/* Confirm modals */}
+      <ConfirmModal
+        open={confirmDeleteAssignment}
+        title="Delete Assignment"
+        message={`This will permanently remove "${assignment.title}" and all of its data — uploads, submissions, comparison results, and artifact files. This cannot be undone.`}
+        confirmLabel="Delete Assignment"
+        danger
+        onConfirm={() => { setConfirmDeleteAssignment(false); deleteAssignmentMutation.mutate(); }}
+        onCancel={() => setConfirmDeleteAssignment(false)}
+      />
+      <ConfirmModal
+        open={Boolean(confirmDeleteSubmission)}
+        title="Delete Submission"
+        message={`Delete "${confirmDeleteSubmission?.name}"? This will also clear comparison results for this assignment.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (confirmDeleteSubmission) {
+            deleteSubmissionMutation.mutate(confirmDeleteSubmission.id);
+          }
+          setConfirmDeleteSubmission(null);
+        }}
+        onCancel={() => setConfirmDeleteSubmission(null)}
+      />
+      <ConfirmModal
+        open={Boolean(confirmDeleteTemplate)}
+        title="Delete Template Version"
+        message={`Delete template version ${confirmDeleteTemplate?.version}? This will also clear comparison results for this assignment.`}
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (confirmDeleteTemplate) {
+            deleteTemplateMutation.mutate(confirmDeleteTemplate.id);
+          }
+          setConfirmDeleteTemplate(null);
+        }}
+        onCancel={() => setConfirmDeleteTemplate(null)}
+      />
+      <ConfirmModal
+        open={Boolean(confirmDeleteCategory)}
+        title={`Delete All ${capitalizeLabel(confirmDeleteCategory?.cat ?? "")}`}
+        message={`Delete all ${confirmDeleteCategory?.count} ${confirmDeleteCategory?.cat} item(s)? This will also clear comparison results for this assignment.`}
+        confirmLabel="Delete All"
+        danger
+        onConfirm={() => {
+          if (confirmDeleteCategory) {
+            deleteCategoryMutation.mutate(confirmDeleteCategory.cat);
+          }
+          setConfirmDeleteCategory(null);
+        }}
+        onCancel={() => setConfirmDeleteCategory(null)}
+      />
 
-        <div className="section-stack">
-          <div className="toolbar-row">
-            <Link className="secondary-button as-link" href="/professor">
-              Back to professor home
-            </Link>
-          </div>
-          <div className="surface-muted stack-sm">
-            <span className="muted-text">Due date</span>
-            <p>{assignment.dueDate ? formatDateTime(assignment.dueDate) : "No due date set"}</p>
-            <p className="pair-note">Shown in your local time. This pass does not enforce deadlines.</p>
-            {dueDateFeedback ? (
-              <div className="alert alert-info">
-                <p>{dueDateFeedback}</p>
-              </div>
-            ) : null}
-            {updateDueDateMutation.error ? (
-              <div className="alert alert-error">
-                <p>{updateDueDateMutation.error.message}</p>
-              </div>
-            ) : null}
-            {isEditingDueDate ? (
-              <form className="form-stack form-compact" onSubmit={handleDueDateSubmit}>
-                <label className="field">
-                  <span>Due date</span>
-                  <input
-                    type="datetime-local"
-                    value={dueDateInput}
-                    onChange={(event) => setDueDateInput(event.target.value)}
-                  />
-                </label>
-                <div className="toolbar-row">
-                  <button
-                    className="primary-button"
-                    disabled={updateDueDateMutation.isPending}
-                    type="submit"
-                  >
-                    {updateDueDateMutation.isPending ? "Saving..." : "Save due date"}
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={updateDueDateMutation.isPending}
-                    type="button"
-                    onClick={() => {
-                      setIsEditingDueDate(false);
-                      setDueDateInput(toDateTimeLocalInputValue(assignment.dueDate));
-                      setDueDateFeedback(null);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="secondary-button"
-                    disabled={updateDueDateMutation.isPending || !assignment.dueDate}
-                    type="button"
-                    onClick={handleClearDueDate}
-                  >
-                    Clear
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="toolbar-row">
-                <button
-                  className="secondary-button"
-                  disabled={updateDueDateMutation.isPending}
-                  type="button"
-                  onClick={() => {
-                    setDueDateFeedback(null);
-                    setIsEditingDueDate(true);
-                  }}
-                >
-                  {assignment.dueDate ? "Edit due date" : "Set due date"}
-                </button>
-                {assignment.dueDate ? (
-                  <button
-                    className="secondary-button"
-                    disabled={updateDueDateMutation.isPending}
-                    type="button"
-                    onClick={handleClearDueDate}
-                  >
-                    Clear due date
-                  </button>
-                ) : null}
-              </div>
-            )}
-          </div>
-          <div className="surface-muted stack-sm">
-            <span className="muted-text">Comparison</span>
-            <div className="meta-line">
-              <span className={`status-badge ${getStatusClassName(latestRun?.status)}`}>
-                {latestRun ? formatStatusLabel(latestRun.status) : "No runs yet"}
-              </span>
-              {latestRun ? (
-                <>
-                  <span className="meta-dot" />
-                  <span>
-                    {latestRun.pairResults.length} {latestRun.pairResults.length === 1 ? "pair" : "pairs"}
-                  </span>
-                </>
-              ) : null}
-            </div>
-            <button
-              className="primary-button"
-              disabled={rerunMutation.isPending}
-              onClick={() => rerunMutation.mutate()}
-              type="button"
-            >
-              {rerunMutation.isPending ? "Queueing..." : "Run comparison"}
-            </button>
-          </div>
+      {/* Page layout */}
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
 
-          <div className="workspace-controls">
-            <div className="segmented-control" role="tablist" aria-label="Workspace view">
-              <button
-                className={`segmented-option ${activeWorkspaceView === "submissions" ? "is-active" : ""}`}
-                onClick={() => setActiveWorkspaceView("submissions")}
-                type="button"
-              >
-                Submissions
-              </button>
-              <button
-                className={`segmented-option ${activeWorkspaceView === "pairs" ? "is-active" : ""}`}
-                onClick={() => setActiveWorkspaceView("pairs")}
-                type="button"
-              >
-                Suspicious pairs
-              </button>
-            </div>
-            {activeWorkspaceView === "pairs" ? (
-              <div className="segmented-control" role="tablist" aria-label="Pair category">
-                <button
-                  className={`segmented-option ${activePairCategory === "current-current" ? "is-active" : ""}`}
-                  onClick={() => setActivePairCategory("current-current")}
-                  type="button"
-                >
-                  Current vs current
-                </button>
-                <button
-                  className={`segmented-option ${activePairCategory === "current-historical" ? "is-active" : ""}`}
-                  onClick={() => setActivePairCategory("current-historical")}
-                  type="button"
-                >
-                  Current vs historical
-                </button>
-              </div>
-            ) : null}
-          </div>
+        {/* Header bar */}
+        <div
+          style={{
+            background: "var(--bg-surface)",
+            borderBottom: "1px solid var(--border-subtle)",
+            padding: "0.65rem 1rem",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => router.push("/professor")}
+            className="btn btn-ghost btn-sm"
+            style={{ marginBottom: "0.6rem", padding: "0.25rem 0.5rem", color: "var(--text-secondary)" }}
+          >
+            <ArrowLeft size={15} /> Back to Dashboard
+          </button>
 
-          {rerunMutation.error ? (
-            <div className="alert alert-error">
-              <p>{rerunMutation.error.message}</p>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <div className="split-grid">
-        <section className="panel">
-          <div className="stack-sm">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
             <div>
-              <p className="eyebrow">Upload</p>
-              <h2>Historical submissions</h2>
-            </div>
-            <p className="subtle-text">
-              Upload one parent archive. First-layer child zip files become submissions.
-            </p>
-          </div>
-
-          <form className="form-stack form-compact" onSubmit={handleHistoricalSubmit}>
-            <label className="field">
-              <span>Zip archive</span>
-              <input
-                type="file"
-                accept=".zip"
-                onChange={(event) => setHistoricalFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-            {historicalFile ? <p className="muted-text">Selected: {historicalFile.name}</p> : null}
-            <button
-              className="primary-button"
-              disabled={!historicalFile || historicalUploadMutation.isPending}
-              type="submit"
-            >
-              {historicalUploadMutation.isPending ? "Uploading..." : "Upload historical archive"}
-            </button>
-          </form>
-        </section>
-
-        <section className="panel">
-          <div className="stack-sm">
-            <div>
-              <p className="eyebrow">Upload</p>
-              <h2>Template code</h2>
-            </div>
-            <p className="subtle-text">
-              Upload starter code or provided files. Template code stays separate from pair review.
-            </p>
-          </div>
-
-          <form className="form-stack form-compact" onSubmit={handleTemplateSubmit}>
-            <label className="field">
-              <span>Zip archive</span>
-              <input
-                type="file"
-                accept=".zip"
-                onChange={(event) => setTemplateFile(event.target.files?.[0] ?? null)}
-              />
-            </label>
-            {templateFile ? <p className="muted-text">Selected: {templateFile.name}</p> : null}
-            <button
-              className="primary-button"
-              disabled={!templateFile || templateUploadMutation.isPending}
-              type="submit"
-            >
-              {templateUploadMutation.isPending ? "Uploading..." : "Upload template archive"}
-            </button>
-          </form>
-        </section>
-      </div>
-
-      {latestUpload ? (
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Latest upload</p>
-              <h2>{formatUploadPurpose(latestUpload.purpose)}</h2>
-            </div>
-            <span className={`status-badge ${getStatusClassName(latestUpload.status)}`}>
-              {formatStatusLabel(latestUpload.status)}
-            </span>
-          </div>
-
-          <p className="subtle-text">
-            {getUploadSummary(latestUpload.status, latestUpload.errorMessage)}
-          </p>
-
-          {latestUpload.errorMessage ? (
-            <div className="history-details">
-              {shouldCollapseMessage(latestUpload.errorMessage) ? (
-                <details>
-                  <summary>View full message</summary>
-                  <p>{latestUpload.errorMessage}</p>
-                </details>
-              ) : (
-                <p>{latestUpload.errorMessage}</p>
-              )}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
-
-      {activeWorkspaceView === "submissions" ? (
-        <>
-          <section className="panel">
-            <div className="section-heading">
-              <h2>Files</h2>
-              <button
-                className="secondary-button"
-                disabled={downloadMutation.isPending || currentSubmissions.length === 0}
-                onClick={() => downloadMutation.mutate({ type: "all" })}
-                type="button"
-              >
-                {downloadMutation.isPending ? "Preparing..." : "Download current submissions"}
-              </button>
-            </div>
-
-            {downloadMutation.error ? (
-              <div className="alert alert-error">
-                <p>{downloadMutation.error.message}</p>
-              </div>
-            ) : null}
-
-              <div className="stats-row">
-              <div className="stat-card">
-                <span>Current submissions</span>
-                <strong>{currentSubmissions.length}</strong>
-              </div>
-              <div className="stat-card">
-                <span>Historical submissions</span>
-                <strong>{historicalSubmissions.length}</strong>
-              </div>
-              <div className="stat-card">
-                <span>Template versions</span>
-                <strong>{templateVersions.length}</strong>
-              </div>
-            </div>
-          </section>
-
-          <div className="split-grid">
-            <section className="panel">
-              <div className="section-heading">
-                <h2>Current</h2>
-                <span className="status-badge">{currentSubmissions.length}</span>
-              </div>
-              {currentSubmissions.length > 0 ? (
-                <div className="card-grid">
-                  {currentSubmissions.map((submission) => (
-                    <article
-                      className={`assignment-card${selectedArtifactKey === `submission:${submission.id}` ? " is-selected" : ""}`}
-                      key={submission.id}
-                    >
-                      <div className="stack-sm">
-                        <p className="eyebrow">Current submission</p>
-                        <h3>{submission.displayName}</h3>
-                        <div className="meta-line">
-                          <span>{submission.fileCount} files</span>
-                          <span className="meta-dot" />
-                          <span>{formatDateTime(submission.createdAt)}</span>
-                        </div>
-                      </div>
-
-                      <div className="card-actions">
-                        <button
-                          className={
-                            selectedArtifactKey === `submission:${submission.id}`
-                              ? "primary-button"
-                              : "secondary-button"
-                          }
-                          onClick={() => setSelectedArtifact({ type: "submission", id: submission.id })}
-                          type="button"
-                        >
-                          View
-                        </button>
-                        <button
-                          className="secondary-button"
-                          disabled={isDangerActionPending || hasActiveAssignmentJobs}
-                          onClick={() =>
-                            handleDeleteHistoricalSubmission(submission.id, submission.displayName)
-                          }
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          className="secondary-button"
-                          disabled={downloadMutation.isPending}
-                          onClick={() =>
-                            downloadMutation.mutate({ type: "submission", id: submission.id })
-                          }
-                          type="button"
-                        >
-                          Download
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <p>No current submissions yet.</p>
-                </div>
-              )}
-            </section>
-
-            <section className="panel">
-              <div className="section-heading">
-                <h2>Historical</h2>
-                <span className="status-badge">{historicalSubmissions.length}</span>
-              </div>
-              {historicalSubmissions.length > 0 ? (
-                <div className="card-grid">
-                  {historicalSubmissions.map((submission) => (
-                    <article
-                      className={`assignment-card${selectedArtifactKey === `submission:${submission.id}` ? " is-selected" : ""}`}
-                      key={submission.id}
-                    >
-                      <div className="stack-sm">
-                        <p className="eyebrow">Historical submission</p>
-                        <h3>{submission.displayName}</h3>
-                        <div className="meta-line">
-                          <span>{submission.fileCount} files</span>
-                          <span className="meta-dot" />
-                          <span>{formatDateTime(submission.createdAt)}</span>
-                        </div>
-                      </div>
-
-                      <div className="card-actions">
-                        <button
-                          className={
-                            selectedArtifactKey === `submission:${submission.id}`
-                              ? "primary-button"
-                              : "secondary-button"
-                          }
-                          onClick={() => setSelectedArtifact({ type: "submission", id: submission.id })}
-                          type="button"
-                        >
-                          View
-                        </button>
-                        <button
-                          className="secondary-button"
-                          disabled={downloadMutation.isPending}
-                          onClick={() =>
-                            downloadMutation.mutate({ type: "submission", id: submission.id })
-                          }
-                          type="button"
-                        >
-                          Download
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <p>No historical submissions yet.</p>
-                </div>
-              )}
-            </section>
-
-            <section className="panel">
-              <div className="section-heading">
-                <h2>Template versions</h2>
-                <span className={`status-badge ${templateVersions.length > 0 ? "is-active" : ""}`}>
-                  {templateVersions.length > 0 ? templateVersions.length : "Missing"}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
+                <h1 style={{ fontSize: "1.35rem", margin: 0 }}>{assignment.title}</h1>
+                <span className={`status-badge badge-${assignment.language.toLowerCase()}`}>
+                  {assignment.language.toUpperCase()}
                 </span>
               </div>
-              {templateVersions.length > 0 ? (
-                <div className="card-grid">
-                  {templateVersions.map((template) => (
-                    <article
-                      className={`assignment-card${selectedArtifactKey === `template:${template.id}` ? " is-selected" : ""}`}
-                      key={template.id}
-                    >
-                      <div className="stack-sm">
-                        <p className="eyebrow">Template code</p>
-                        <h3>Version {template.versionNumber}</h3>
-                        <div className="meta-line">
-                          <span>{template.fileCount} files</span>
-                          <span className="meta-dot" />
-                          <span>{formatDateTime(template.createdAt)}</span>
-                        </div>
-                        <div className="meta-line">
-                          <span className={`status-badge ${template.isActive ? "is-active" : ""}`}>
-                            {template.isActive ? "Active template" : "Inactive template"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="card-actions">
-                        <button
-                          className={
-                            selectedArtifactKey === `template:${template.id}`
-                              ? "primary-button"
-                              : "secondary-button"
-                          }
-                          onClick={() =>
-                            setSelectedArtifact({
-                              type: "template",
-                              id: template.id,
-                            })
-                          }
-                          type="button"
-                        >
-                          View
-                        </button>
-                        <button
-                          className="secondary-button"
-                          disabled={downloadMutation.isPending}
-                          onClick={() =>
-                            downloadMutation.mutate({
-                              type: "template",
-                              id: template.id,
-                            })
-                          }
-                          type="button"
-                        >
-                          Download
-                        </button>
-                        <button
-                          className="secondary-button"
-                          disabled={isDangerActionPending || hasActiveAssignmentJobs}
-                          onClick={() => handleDeleteTemplate(template.id, template.versionNumber)}
-                          type="button"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <p>No template versions uploaded yet.</p>
-                </div>
-              )}
-            </section>
-          </div>
-
-          <section className="panel">
-            <div className="section-heading">
-              <h2>Viewer</h2>
-              {artifactDetailQuery.data ? (
-                <button
-                  className="secondary-button"
-                  disabled={downloadMutation.isPending}
-                  onClick={() =>
-                    artifactDetailQuery.data.kind === "template"
-                      ? downloadMutation.mutate({
-                          type: "template",
-                          id: artifactDetailQuery.data.id,
-                        })
-                      : downloadMutation.mutate({
-                          type: "submission",
-                          id: artifactDetailQuery.data.id,
-                        })
-                  }
-                  type="button"
-                >
-                  Download
-                </button>
-              ) : null}
-            </div>
-            {!selectedArtifact ? (
-              <div className="empty-state viewer-empty">
-                <p>Select a submission or template to open it here.</p>
-              </div>
-            ) : artifactDetailQuery.isLoading ? (
-              <div className="empty-state viewer-empty">
-                <p>Loading viewer...</p>
-              </div>
-            ) : artifactDetailQuery.error ? (
-              <div className="alert alert-error">
-                <p>{artifactDetailQuery.error.message}</p>
-              </div>
-            ) : artifactDetailQuery.data ? (
-              <div className="file-viewer">
-                <div className="artifact-header">
-                  <div className="stack-sm">
-                    <div>
-                      <p className="eyebrow">
-                        {artifactDetailQuery.data.kind === "template"
-                          ? `Template code v${artifactDetailQuery.data.versionNumber ?? 1}`
-                          : `${capitalizeLabel(artifactDetailQuery.data.kind)} submission`}
-                      </p>
-                      <h3>{artifactDetailQuery.data.displayName}</h3>
-                    </div>
-                    <div className="meta-line">
-                      <span>{artifactDetailQuery.data.fileCount} files</span>
-                      <span className="meta-dot" />
-                      <span>{formatDateTime(artifactDetailQuery.data.createdAt)}</span>
-                    </div>
-                    {artifactDetailQuery.data.kind !== "template" ? (
-                      <SubmissionIdentityPanel
-                        identityRevealMode={artifactDetailQuery.data.identityRevealMode}
-                        isRevealPending={revealIdentityMutation.isPending}
-                        onHide={handleHideIdentity}
-                        onReveal={
-                          artifactDetailQuery.data.identityRevealMode
-                            ? () => revealIdentityMutation.mutate(artifactDetailQuery.data!.id)
-                            : null
-                        }
-                        revealError={revealIdentityMutation.error?.message ?? null}
-                        revealedIdentity={revealedIdentity}
-                      />
-                    ) : null}
-                  </div>
-                  <span className={`status-badge ${artifactDetailQuery.data.kind === "template" ? "is-active" : ""}`}>
-                    {artifactDetailQuery.data.kind === "template"
-                      ? "Template"
-                      : capitalizeLabel(artifactDetailQuery.data.kind)}
+              <div style={{ display: "flex", gap: "1rem", color: "var(--text-secondary)", fontSize: "0.8rem", flexWrap: "wrap" }}>
+                {activeKey && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <Key size={13} />
+                    <span className="mono">{activeKey}</span>
                   </span>
+                )}
+                {assignment.dueDate && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <Clock size={13} /> Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                  </span>
+                )}
+                {latestRun && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span className={`status-badge ${getBadgeClass(latestRun.status)}`} style={{ padding: "0.1rem 0.45rem", fontSize: "0.68rem" }}>
+                      {latestRun.status}
+                    </span>
+                    {latestRun.pairResults.length} pairs
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button
+                className="btn btn-outline"
+                disabled={downloadMutation.isPending || currentSubmissions.length === 0}
+                onClick={() => downloadMutation.mutate({ type: "all" })}
+              >
+                {downloadMutation.isPending ? <Loader2 size={15} className="anim-spin" /> : <Download size={15} />}
+                Download
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={rerunMutation.isPending || hasActiveJobs}
+                onClick={() => rerunMutation.mutate()}
+              >
+                {rerunMutation.isPending ? <Loader2 size={15} className="anim-spin" /> : <Play size={15} fill="currentColor" />}
+                {rerunMutation.isPending ? "Queueing..." : "Run Comparison"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Body: sidebar + content */}
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+
+          {/* Sidebar */}
+          <aside
+            style={{
+              width: isSidebarCollapsed ? "68px" : "220px",
+              background: "var(--bg-surface-raised)",
+              borderRight: "1px solid var(--border-subtle)",
+              padding: "0.6rem 0.45rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.2rem",
+              flexShrink: 0,
+              transition: "width 0.2s ease",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: isSidebarCollapsed ? "center" : "space-between",
+                padding: isSidebarCollapsed ? "0" : "0 0.35rem",
+                marginBottom: "0.25rem",
+              }}
+            >
+              {!isSidebarCollapsed && (
+                <span style={{ fontSize: "0.7rem", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 600 }}>
+                  Workspace
+                </span>
+              )}
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={() => setIsSidebarCollapsed((v) => !v)}
+                style={{ padding: "0.25rem 0.4rem" }}
+                title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {isSidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
+              </button>
+            </div>
+
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                className={`sidebar-tab ${activeTab === tab.id ? "active" : ""}`}
+                onClick={() => setActiveTab(tab.id)}
+                title={tab.label}
+                style={{
+                  justifyContent: isSidebarCollapsed ? "center" : "flex-start",
+                  padding: isSidebarCollapsed ? "0.65rem 0.4rem" : undefined,
+                  color: tab.id === "danger" && activeTab !== tab.id ? "var(--accent-red)" : undefined,
+                }}
+              >
+                {tab.icon}
+                {!isSidebarCollapsed && (
+                  <>
+                    <span style={{ flex: 1 }}>{tab.label}</span>
+                    {tab.badge !== undefined && tab.badge > 0 && (
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          background: "var(--bg-surface)",
+                          padding: "0.1rem 0.45rem",
+                          borderRadius: "var(--radius-full)",
+                          color: "var(--text-secondary)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            ))}
+          </aside>
+
+          {/* Main content */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem" }}>
+
+            {/* ── SUBMISSIONS TAB ── */}
+            {activeTab === "submissions" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+                {/* Stats */}
+                <div className="stat-grid">
+                  <div className="stat-tile">
+                    <div className="stat-tile-label">Current</div>
+                    <div className="stat-tile-value">{currentSubmissions.length}</div>
+                  </div>
+                  <div className="stat-tile">
+                    <div className="stat-tile-label">Historical</div>
+                    <div className="stat-tile-value">{historicalSubmissions.length}</div>
+                  </div>
+                  <div className="stat-tile">
+                    <div className="stat-tile-label">Templates</div>
+                    <div className="stat-tile-value">{templateVersions.length}</div>
+                  </div>
                 </div>
 
-                <div className="artifact-files">
-                  {artifactDetailQuery.data.files.map((file) => {
-                    const isJunk = isLikelyJunkFile(file.relativePath, file.archivePath);
-
-                    return (
-                      <article
-                        className={`artifact-file-card${isJunk ? " is-junk" : ""}`}
-                        key={file.id}
+                {/* Current submissions */}
+                <SectionBox
+                  title="Current Submissions"
+                  badge={currentSubmissions.length}
+                  action={
+                    currentSubmissions.length > 0 ? (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        disabled={downloadMutation.isPending}
+                        onClick={() => downloadMutation.mutate({ type: "all" })}
                       >
-                        <div className="artifact-file-head">
-                          <div>
-                            <span className="artifact-subpath">{file.archivePath ?? "Source file"}</span>
-                            <span className="artifact-file-path mono">{file.relativePath}</span>
-                          </div>
-                          <span className={`status-badge ${isJunk ? "" : "is-active"}`}>
-                            {isJunk ? "System file" : "Source"}
-                          </span>
-                        </div>
+                        <Download size={13} /> Download All
+                      </button>
+                    ) : undefined
+                  }
+                >
+                  {currentSubmissions.length === 0 ? (
+                    <div className="empty-state" style={{ padding: "1.5rem" }}>
+                      <p style={{ fontSize: "0.875rem" }}>No current submissions yet.</p>
+                    </div>
+                  ) : (
+                    <SubmissionTable
+                      submissions={currentSubmissions}
+                      selectedKey={selectedArtifactKey}
+                      onSelect={(id) => setSelectedArtifact({ type: "submission", id })}
+                      onDownload={(id) => downloadMutation.mutate({ type: "submission", id })}
+                      showDelete={false}
+                    />
+                  )}
+                </SectionBox>
 
-                        <div className="code-surface">
-                          <div className="code-surface-head">
-                            <span className="mono">{file.relativePath}</span>
-                            <div className="dots" aria-hidden="true">
-                              <span />
-                              <span />
-                              <span />
+                {/* Historical submissions */}
+                <SectionBox title="Historical Submissions" badge={historicalSubmissions.length}>
+                  {historicalSubmissions.length === 0 ? (
+                    <div className="empty-state" style={{ padding: "1.5rem" }}>
+                      <p style={{ fontSize: "0.875rem" }}>No historical submissions yet. Upload historical archives in the Uploads tab.</p>
+                    </div>
+                  ) : (
+                    <SubmissionTable
+                      submissions={historicalSubmissions}
+                      selectedKey={selectedArtifactKey}
+                      onSelect={(id) => setSelectedArtifact({ type: "submission", id })}
+                      onDownload={(id) => downloadMutation.mutate({ type: "submission", id })}
+                      showDelete
+                      isDangerPending={isDangerPending || hasActiveJobs}
+                      onDelete={(id, name) => setConfirmDeleteSubmission({ id, name })}
+                    />
+                  )}
+                </SectionBox>
+
+                {/* Template versions */}
+                <SectionBox
+                  title="Template Versions"
+                  badge={templateVersions.length}
+                  badgeVariant={templateVersions.length === 0 ? "warn" : "default"}
+                >
+                  {templateVersions.length === 0 ? (
+                    <div className="empty-state" style={{ padding: "1.5rem" }}>
+                      <p style={{ fontSize: "0.875rem" }}>No template uploaded yet. Upload starter code in the Uploads tab.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+                      {templateVersions.map((t) => (
+                        <div
+                          key={t.id}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr auto",
+                            alignItems: "center",
+                            gap: "0.75rem",
+                            padding: "0.75rem 1rem",
+                            borderBottom: "1px solid var(--border-subtle)",
+                            background: selectedArtifactKey === `template:${t.id}` ? "var(--brand-soft)" : undefined,
+                          }}
+                        >
+                          <div style={{ display: "flex", flex: 1, alignItems: "center", gap: "0.75rem" }}>
+                            <FileCode size={15} color="var(--text-tertiary)" />
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
+                                Version {t.versionNumber}
+                                {t.isActive && (
+                                  <span className="status-badge badge-ready" style={{ marginLeft: "0.5rem", fontSize: "0.65rem" }}>Active</span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)" }}>
+                                {t.fileCount} files &middot; {formatDateTime(t.createdAt)}
+                              </div>
                             </div>
                           </div>
-                          <pre>{file.contents}</pre>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="empty-state viewer-empty">
-                <p>Select a submission or template to open it here.</p>
-              </div>
-            )}
-          </section>
-
-          <section className="panel">
-            <div className="section-heading">
-              <h2>Recent uploads</h2>
-            </div>
-            {assignment.uploadBatches.length > 0 ? (
-              <div className="history-list">
-                {assignment.uploadBatches.map((batch) => {
-                  const message = batch.errorMessage?.trim() ?? "";
-
-                  return (
-                    <article className="history-item" key={batch.id}>
-                      <div className="history-top">
-                        <div>
-                          <strong>{formatUploadPurpose(batch.purpose)}</strong>
-                          <div className="meta-line">
-                            <span>{formatDateTime(batch.createdAt)}</span>
-                            <span className="meta-dot" />
-                            <span>Updated {formatDateTime(batch.updatedAt)}</span>
+                          <div style={{ display: "flex", gap: "0.4rem" }}>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => setSelectedArtifact({ type: "template", id: t.id })}
+                            >
+                              <Eye size={13} />
+                            </button>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              disabled={downloadMutation.isPending}
+                              onClick={() => downloadMutation.mutate({ type: "template", id: t.id })}
+                            >
+                              <Download size={13} />
+                            </button>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              disabled={isDangerPending || hasActiveJobs}
+                              onClick={() => setConfirmDeleteTemplate({ id: t.id, version: t.versionNumber })}
+                              style={{ color: "var(--accent-red)", borderColor: "var(--accent-red)" }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
                           </div>
                         </div>
-                        <span className={`status-badge ${getStatusClassName(batch.status)}`}>
-                          {formatStatusLabel(batch.status)}
-                        </span>
+                      ))}
+                    </div>
+                  )}
+                </SectionBox>
+
+                {/* Viewer */}
+                {selectedArtifact && (
+                  <SectionBox
+                    title={
+                      artifactDetailQuery.data
+                        ? `${artifactDetailQuery.data.kind === "template" ? `Template v${artifactDetailQuery.data.versionNumber ?? 1}` : capitalizeLabel(artifactDetailQuery.data.kind)} — ${artifactDetailQuery.data.displayName}`
+                        : "Artifact Viewer"
+                    }
+                    action={
+                      artifactDetailQuery.data ? (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={downloadMutation.isPending}
+                          onClick={() =>
+                            artifactDetailQuery.data!.kind === "template"
+                              ? downloadMutation.mutate({ type: "template", id: artifactDetailQuery.data!.id })
+                              : downloadMutation.mutate({ type: "submission", id: artifactDetailQuery.data!.id })
+                          }
+                        >
+                          <Download size={13} /> Download
+                        </button>
+                      ) : undefined
+                    }
+                  >
+                    {artifactDetailQuery.isLoading ? (
+                      <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem" }}>
+                        <Loader2 size={16} className="anim-spin" /> Loading...
                       </div>
-                      <p className="history-message">{getUploadSummary(batch.status, batch.errorMessage)}</p>
-                      {message ? (
-                        <div className="history-details">
-                          {shouldCollapseMessage(message) ? (
-                            <details>
-                              <summary>View full message</summary>
-                              <p>{message}</p>
-                            </details>
-                          ) : (
-                            <p>{message}</p>
-                          )}
+                    ) : artifactDetailQuery.error ? (
+                      <div className="alert alert-error" style={{ margin: "1rem" }}>
+                        {artifactDetailQuery.error.message}
+                      </div>
+                    ) : artifactDetailQuery.data ? (
+                      <div style={{ padding: "1rem" }}>
+                        {artifactDetailQuery.data.kind !== "template" && (
+                          <div style={{ marginBottom: "1rem" }}>
+                            <SubmissionIdentityPanel
+                              identityRevealMode={artifactDetailQuery.data.identityRevealMode}
+                              isRevealPending={revealIdentityMutation.isPending}
+                              onHide={() => { setRevealedIdentity(null); revealIdentityMutation.reset(); }}
+                              onReveal={
+                                artifactDetailQuery.data.identityRevealMode
+                                  ? () => revealIdentityMutation.mutate(artifactDetailQuery.data!.id)
+                                  : null
+                              }
+                              revealError={revealIdentityMutation.error?.message ?? null}
+                              revealedIdentity={revealedIdentity}
+                            />
+                          </div>
+                        )}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          {artifactDetailQuery.data.files.map((file) => {
+                            const isJunk = isLikelyJunkFile(file.relativePath, file.archivePath);
+                            return (
+                              <div
+                                key={file.id}
+                                style={{
+                                  borderRadius: "var(--radius-md)",
+                                  overflow: "hidden",
+                                  border: "1px solid rgba(15,23,42,0.1)",
+                                  opacity: isJunk ? 0.6 : 1,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    background: "rgba(15,23,42,0.96)",
+                                    padding: "0.6rem 1rem",
+                                    borderBottom: "1px solid rgba(148,163,184,0.16)",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <span style={{ color: "#e2e8f0", fontSize: "0.82rem", fontFamily: "var(--font-mono)" }}>
+                                    {file.relativePath}
+                                  </span>
+                                  {isJunk && (
+                                    <span style={{ fontSize: "0.65rem", color: "rgba(203,213,225,0.6)", background: "rgba(255,255,255,0.08)", padding: "0.1rem 0.4rem", borderRadius: "var(--radius-sm)" }}>
+                                      system file
+                                    </span>
+                                  )}
+                                </div>
+                                <pre
+                                  style={{
+                                    margin: 0,
+                                    padding: "1rem",
+                                    background: "#0f172a",
+                                    color: "#e2e8f0",
+                                    fontSize: "0.82rem",
+                                    fontFamily: "var(--font-mono)",
+                                    lineHeight: 1.6,
+                                    overflow: "auto",
+                                    maxHeight: 400,
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-word",
+                                  }}
+                                >
+                                  {file.contents}
+                                </pre>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ) : null}
-                    </article>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <p>No uploads yet.</p>
+                      </div>
+                    ) : null}
+                  </SectionBox>
+                )}
               </div>
             )}
-          </section>
-        </>
-      ) : (
-        <section className="panel">
-          <div className="section-heading">
-            <h2>Suspicious pairs</h2>
-          </div>
 
-          {latestVisibleRun ? (
-            <div className="section-stack">
-              <div className="surface-muted stack-sm">
-                <div className="meta-line">
-                  <span className={`status-badge ${getStatusClassName(latestVisibleRun.status)}`}>
-                    {formatStatusLabel(latestVisibleRun.status)}
-                  </span>
-                  <span className="meta-dot" />
-                  <span>Latest run: {latestVisibleRun.id}</span>
-                  <span className="meta-dot" />
-                  <span>{sectionedPairs.shownCount} shown of {sectionedPairs.totalCount} pairs</span>
-                </div>
-                {sectionedPairs.hiddenPairs.length > 0 ? (
-                  <div className="toolbar-row">
+            {/* ── PAIRS TAB ── */}
+            {activeTab === "pairs" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                {/* Run status */}
+                <div className="glass-card" style={{ padding: "1rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
+                    <div>
+                      <h2 style={{ fontSize: "1rem", marginBottom: "0.2rem" }}>Comparison Results</h2>
+                      {latestRun ? (
+                        <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                          <span className={`status-badge ${getBadgeClass(latestRun.status)}`}>{latestRun.status}</span>
+                          <span>{latestRun.pairResults.length} pairs</span>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-tertiary)" }}>No runs yet.</p>
+                      )}
+                    </div>
                     <button
-                      className="secondary-button"
-                      onClick={() => setShowAllPairs((current) => !current)}
-                      type="button"
+                      className="btn btn-primary"
+                      disabled={rerunMutation.isPending || hasActiveJobs}
+                      onClick={() => rerunMutation.mutate()}
                     >
-                      {showAllPairs ? "Hide lower-priority pairs" : "Show all pairs"}
+                      {rerunMutation.isPending ? <Loader2 size={14} className="anim-spin" /> : <Play size={14} fill="currentColor" />}
+                      {rerunMutation.isPending ? "Queueing..." : "Run Comparison"}
                     </button>
                   </div>
-                ) : null}
-                {latestVisibleRun.errorMessage ? (
-                  <div className="history-details">
-                    {shouldCollapseMessage(latestVisibleRun.errorMessage) ? (
-                      <details>
-                        <summary>View full message</summary>
-                        <p>{latestVisibleRun.errorMessage}</p>
-                      </details>
+                </div>
+
+                {/* Category switcher */}
+                <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "0.75rem" }}>
+                  {(["current-current", "current-historical"] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      className={`btn ${activePairCategory === cat ? "btn-primary" : "btn-outline"} btn-sm`}
+                      onClick={() => setActivePairCategory(cat)}
+                    >
+                      {cat === "current-current" ? "Current vs Current" : "Current vs Historical"}
+                    </button>
+                  ))}
+                </div>
+
+                {latestVisibleRun ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)" }}>
+                        Showing {sectionedPairs.shownCount} of {sectionedPairs.totalCount} pairs
+                      </p>
+                      {sectionedPairs.hiddenPairs.length > 0 && (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setShowAllPairs((v) => !v)}
+                        >
+                          {showAllPairs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                          {showAllPairs ? "Hide lower-priority" : "Show all pairs"}
+                        </button>
+                      )}
+                    </div>
+
+                    {visiblePairs.length === 0 ? (
+                      <div className="empty-state">
+                        <p style={{ fontSize: "0.875rem" }}>
+                          No {activePairCategory === "current-current" ? "current vs current" : "current vs historical"} pairs in this run.
+                        </p>
+                      </div>
                     ) : (
-                      <p>{latestVisibleRun.errorMessage}</p>
+                      <>
+                        {sectionedPairs.codeSuspicious.length > 0 && (
+                          <PairSection
+                            assignmentId={assignment.id}
+                            title="Suspicious by Code"
+                            description={`Code similarity ≥ ${formatSimilarityPercent(CODE_SUSPICIOUS_THRESHOLD)}`}
+                            pairs={sectionedPairs.codeSuspicious}
+                          />
+                        )}
+                        {sectionedPairs.commentSupportedLowCode.length > 0 && (
+                          <PairSection
+                            assignmentId={assignment.id}
+                            title="Comment-Supported"
+                            description="Low code similarity but with meaningful comment matches"
+                            pairs={sectionedPairs.commentSupportedLowCode}
+                          />
+                        )}
+                        {showAllPairs && sectionedPairs.hiddenPairs.length > 0 && (
+                          <PairSection
+                            assignmentId={assignment.id}
+                            title="Remaining Pairs"
+                            description="All remaining pairs"
+                            pairs={sectionedPairs.hiddenPairs}
+                          />
+                        )}
+                      </>
                     )}
                   </div>
-                ) : null}
+                ) : (
+                  <div className="empty-state">
+                    <Database className="empty-state-icon" size={40} />
+                    <h3 style={{ fontSize: "1rem", marginBottom: "0.35rem" }}>No Comparison Results</h3>
+                    <p style={{ fontSize: "0.875rem" }}>Run a comparison to see suspicious pairs.</p>
+                  </div>
+                )}
               </div>
+            )}
 
-              {visiblePairs.length > 0 ? (
-                <div className="section-stack">
-                  {sectionedPairs.codeSuspicious.length > 0 ? (
-                    <PairSection
-                      assignmentId={assignment.id}
-                      description={`Code similarity at or above ${formatSimilarityPercent(CODE_SUSPICIOUS_THRESHOLD)}.`}
-                      pairs={sectionedPairs.codeSuspicious}
-                      title="Suspicious by code"
-                    />
-                  ) : null}
+            {/* ── UPLOADS TAB ── */}
+            {activeTab === "uploads" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
 
-                  {sectionedPairs.commentSupportedLowCode.length > 0 ? (
-                    <PairSection
-                      assignmentId={assignment.id}
-                      description="Visible by default because they have one or more meaningful comment matches, but they stay below the main code-suspicious pairs."
-                      pairs={sectionedPairs.commentSupportedLowCode}
-                      title="Comment-supported low-code pairs"
-                    />
-                  ) : null}
+                {/* Upload status tracker */}
+                {latestUpload && (
+                  <div className="glass-card" style={{ padding: "1rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <h3 style={{ fontSize: "0.95rem", margin: 0 }}>{formatUploadPurpose(latestUpload.purpose)}</h3>
+                      <span className={`status-badge ${getBadgeClass(latestUpload.status)}`}>
+                        {latestUpload.status}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                      {getUploadSummary(latestUpload.status, latestUpload.errorMessage)}
+                    </p>
+                    {latestUpload.errorMessage && (
+                      <div className="alert alert-error" style={{ marginTop: "0.75rem", fontSize: "0.82rem" }}>
+                        {latestUpload.errorMessage}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                  {showAllPairs && sectionedPairs.hiddenPairs.length > 0 ? (
-                    <PairSection
-                      assignmentId={assignment.id}
-                      description="Remaining pairs shown for completeness. These stay below the main suspicious sections."
-                      pairs={sectionedPairs.hiddenPairs}
-                      title="Remaining pairs"
-                    />
-                  ) : null}
+                {/* Upload forms side-by-side */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem" }}>
+
+                  {/* Historical upload */}
+                  <div className="glass-card" style={{ padding: "1.25rem" }}>
+                    <h3 style={{ fontSize: "0.95rem", marginBottom: "0.25rem" }}>Historical Submissions</h3>
+                    <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+                      Upload one parent archive. First-layer child zip files become historical submissions.
+                    </p>
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); if (historicalFile && session) historicalUploadMutation.mutate(); }}
+                      style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+                    >
+                      <div className="form-group">
+                        <label className="form-label">Zip Archive</label>
+                        <input
+                          className="form-input"
+                          type="file"
+                          accept=".zip"
+                          onChange={(e) => setHistoricalFile(e.target.files?.[0] ?? null)}
+                        />
+                      </div>
+                      {historicalFile && (
+                        <p style={{ fontSize: "0.78rem", color: "var(--text-tertiary)" }}>
+                          <FileArchive size={12} style={{ display: "inline", marginRight: "0.25rem" }} />
+                          {historicalFile.name}
+                        </p>
+                      )}
+                      <button
+                        className="btn btn-primary"
+                        disabled={!historicalFile || historicalUploadMutation.isPending}
+                        type="submit"
+                        style={{ width: "100%" }}
+                      >
+                        {historicalUploadMutation.isPending ? (
+                          <><Loader2 size={14} className="anim-spin" /> Uploading...</>
+                        ) : (
+                          <><Upload size={14} /> Upload Historical</>
+                        )}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Template upload */}
+                  <div className="glass-card" style={{ padding: "1.25rem" }}>
+                    <h3 style={{ fontSize: "0.95rem", marginBottom: "0.25rem" }}>Template Code</h3>
+                    <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "1rem" }}>
+                      Upload starter or provided code. Template files stay separate from pair review.
+                    </p>
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); if (templateFile && session) templateUploadMutation.mutate(); }}
+                      style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+                    >
+                      <div className="form-group">
+                        <label className="form-label">Zip Archive</label>
+                        <input
+                          className="form-input"
+                          type="file"
+                          accept=".zip"
+                          onChange={(e) => setTemplateFile(e.target.files?.[0] ?? null)}
+                        />
+                      </div>
+                      {templateFile && (
+                        <p style={{ fontSize: "0.78rem", color: "var(--text-tertiary)" }}>
+                          <FileArchive size={12} style={{ display: "inline", marginRight: "0.25rem" }} />
+                          {templateFile.name}
+                        </p>
+                      )}
+                      <button
+                        className="btn btn-primary"
+                        disabled={!templateFile || templateUploadMutation.isPending}
+                        type="submit"
+                        style={{ width: "100%" }}
+                      >
+                        {templateUploadMutation.isPending ? (
+                          <><Loader2 size={14} className="anim-spin" /> Uploading...</>
+                        ) : (
+                          <><Upload size={14} /> Upload Template</>
+                        )}
+                      </button>
+                    </form>
+                  </div>
                 </div>
-              ) : (
-                <div className="empty-state">
-                  <p>
-                    {activePairCategory === "current-current"
-                      ? "No current vs current pairs in this run."
-                      : "No current vs historical pairs in this run."}
+
+                {/* Due date editor */}
+                <div className="glass-card" style={{ padding: "1.25rem" }}>
+                  <h3 style={{ fontSize: "0.95rem", marginBottom: "0.5rem" }}>Due Date</h3>
+                  <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.75rem" }}>
+                    {assignment.dueDate ? `Currently: ${formatDateTime(assignment.dueDate)}` : "No due date set."}
                   </p>
+                  {isEditingDueDate ? (
+                    <form
+                      onSubmit={(e: FormEvent<HTMLFormElement>) => {
+                        e.preventDefault();
+                        const next = dueDateInput.trim() ? new Date(dueDateInput) : null;
+                        updateDueDateMutation.mutate(next ? next.toISOString() : null);
+                      }}
+                      style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+                    >
+                      <input
+                        className="form-input"
+                        type="datetime-local"
+                        value={dueDateInput}
+                        onChange={(e) => setDueDateInput(e.target.value)}
+                      />
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button className="btn btn-primary btn-sm" disabled={updateDueDateMutation.isPending} type="submit">
+                          Save
+                        </button>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          disabled={updateDueDateMutation.isPending}
+                          type="button"
+                          onClick={() => setIsEditingDueDate(false)}
+                        >
+                          Cancel
+                        </button>
+                        {assignment.dueDate && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            disabled={updateDueDateMutation.isPending}
+                            type="button"
+                            onClick={() => updateDueDateMutation.mutate(null)}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={() => setIsEditingDueDate(true)}
+                    >
+                      <Clock size={13} /> {assignment.dueDate ? "Edit Due Date" : "Set Due Date"}
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <p>No results yet.</p>
-            </div>
+
+                {/* Upload history */}
+                {assignment.uploadBatches.length > 0 && (
+                  <div>
+                    <h3 style={{ fontSize: "0.9rem", marginBottom: "0.65rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                      Upload History
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                      {assignment.uploadBatches.map((batch) => (
+                        <div
+                          key={batch.id}
+                          className="glass-card"
+                          style={{ padding: "0.85rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{formatUploadPurpose(batch.purpose)}</div>
+                            <div style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginTop: "0.15rem" }}>
+                              {formatDateTime(batch.createdAt)}
+                            </div>
+                            {batch.errorMessage && (
+                              <div style={{ fontSize: "0.75rem", color: "var(--accent-red)", marginTop: "0.2rem" }}>
+                                {batch.errorMessage.slice(0, 80)}{batch.errorMessage.length > 80 ? "..." : ""}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`status-badge ${getBadgeClass(batch.status)}`}>
+                            {batch.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── DANGER ZONE TAB ── */}
+            {activeTab === "danger" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <div
+                  style={{
+                    padding: "1rem",
+                    background: "var(--accent-red-soft)",
+                    border: "1px solid rgba(220,38,38,0.2)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "0.875rem",
+                    color: "#991b1b",
+                  }}
+                >
+                  <strong>Warning:</strong> Actions in this zone are irreversible. Deleting submissions or
+                  categories will also clear all comparison results for this assignment.
+                </div>
+
+                {hasActiveJobs && (
+                  <div className="alert alert-info">
+                    Destructive actions are disabled while uploads or comparison runs are active.
+                  </div>
+                )}
+
+                {/* Category deletes */}
+                <div className="glass-card" style={{ padding: "1.25rem" }}>
+                  <h3 style={{ fontSize: "0.95rem", marginBottom: "0.75rem" }}>Delete Category</h3>
+                  <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      disabled={isDangerPending || hasActiveJobs || currentSubmissions.length === 0}
+                      onClick={() => setConfirmDeleteCategory({ cat: "current", count: currentSubmissions.length })}
+                      style={{ color: "var(--accent-red)", borderColor: "var(--accent-red)" }}
+                    >
+                      <Trash2 size={13} /> Delete All Current ({currentSubmissions.length})
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      disabled={isDangerPending || hasActiveJobs || historicalSubmissions.length === 0}
+                      onClick={() => setConfirmDeleteCategory({ cat: "historical", count: historicalSubmissions.length })}
+                      style={{ color: "var(--accent-red)", borderColor: "var(--accent-red)" }}
+                    >
+                      <Trash2 size={13} /> Delete All Historical ({historicalSubmissions.length})
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      disabled={isDangerPending || hasActiveJobs || templateVersions.length === 0}
+                      onClick={() => setConfirmDeleteCategory({ cat: "template", count: templateVersions.length })}
+                      style={{ color: "var(--accent-red)", borderColor: "var(--accent-red)" }}
+                    >
+                      <Trash2 size={13} /> Delete All Templates ({templateVersions.length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Delete assignment */}
+                <div className="glass-card" style={{ padding: "1.25rem" }}>
+                  <h3 style={{ fontSize: "0.95rem", marginBottom: "0.4rem" }}>Delete Entire Assignment</h3>
+                  <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.85rem" }}>
+                    Permanently removes this assignment and all related uploads, artifacts, and comparison data.
+                  </p>
+                  <button
+                    className="btn btn-danger btn-sm"
+                    disabled={isDangerPending || hasActiveJobs}
+                    onClick={() => setConfirmDeleteAssignment(true)}
+                  >
+                    {deleteAssignmentMutation.isPending ? <Loader2 size={13} className="anim-spin" /> : <Trash2 size={13} />}
+                    {deleteAssignmentMutation.isPending ? "Deleting..." : "Delete Assignment"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Sub-components ──
+
+function SectionBox({
+  title,
+  badge,
+  badgeVariant = "default",
+  action,
+  children,
+}: {
+  title: string;
+  badge?: number;
+  badgeVariant?: "default" | "warn";
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="glass-card" style={{ overflow: "hidden" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "0.85rem 1rem",
+          borderBottom: "1px solid var(--border-subtle)",
+          background: "var(--bg-surface-raised)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 600, margin: 0 }}>{title}</h3>
+          {badge !== undefined && (
+            <span
+              style={{
+                fontSize: "0.7rem",
+                background: badgeVariant === "warn" && badge === 0 ? "var(--accent-yellow-soft)" : "var(--bg-surface-highest)",
+                color: badgeVariant === "warn" && badge === 0 ? "var(--accent-yellow)" : "var(--text-secondary)",
+                borderRadius: "var(--radius-full)",
+                padding: "0.1rem 0.45rem",
+                fontWeight: 700,
+              }}
+            >
+              {badge}
+            </span>
           )}
-        </section>
-      )}
-
-      <section className="panel">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Danger zone</p>
-            <h2>Delete assignment data</h2>
-          </div>
-          <span className="status-badge is-failed">Destructive</span>
         </div>
-
-        <div className="section-stack">
-          <p className="subtle-text">
-            These actions permanently remove assignment data. Any delete that changes the comparison
-            pool also clears comparison results for this assignment.
-          </p>
-
-          {hasActiveAssignmentJobs ? (
-            <div className="alert alert-info">
-              <p>Deletes are disabled while uploads or comparison runs are still in progress.</p>
-            </div>
-          ) : null}
-
-          {dangerFeedback ? (
-            <div className="alert alert-info">
-              <p>{dangerFeedback}</p>
-            </div>
-          ) : null}
-
-          {destructiveError ? (
-            <div className="alert alert-error">
-              <p>{destructiveError}</p>
-            </div>
-          ) : null}
-
-          <div className="surface-muted stack-sm">
-            <strong>Delete all items in one category</strong>
-            <div className="toolbar-row">
-              <button
-                className="secondary-button"
-                disabled={isDangerActionPending || hasActiveAssignmentJobs || currentSubmissions.length === 0}
-                onClick={() => handleDeleteCategory("current", currentSubmissions.length)}
-                type="button"
-              >
-                Delete all current ({currentSubmissions.length})
-              </button>
-              <button
-                className="secondary-button"
-                disabled={isDangerActionPending || hasActiveAssignmentJobs || historicalSubmissions.length === 0}
-                onClick={() => handleDeleteCategory("historical", historicalSubmissions.length)}
-                type="button"
-              >
-                Delete all historical ({historicalSubmissions.length})
-              </button>
-              <button
-                className="secondary-button"
-                disabled={isDangerActionPending || hasActiveAssignmentJobs || templateVersions.length === 0}
-                onClick={() => handleDeleteCategory("template", templateVersions.length)}
-                type="button"
-              >
-                Delete all template ({templateVersions.length})
-              </button>
-            </div>
-          </div>
-
-          <div className="surface-muted stack-sm">
-            <strong>Delete entire assignment</strong>
-            <p className="pair-note">
-              Type <span className="mono">DELETE</span> when prompted to remove this assignment and all
-              related uploads, artifacts, and comparison data.
-            </p>
-            <div className="toolbar-row">
-              <button
-                className="secondary-button"
-                disabled={isDangerActionPending || hasActiveAssignmentJobs}
-                onClick={handleDeleteAssignment}
-                type="button"
-              >
-                {deleteAssignmentMutation.isPending ? "Deleting..." : "Delete assignment"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+        {action}
+      </div>
+      {children}
     </div>
   );
+}
+
+function SubmissionTable({
+  submissions,
+  selectedKey,
+  onSelect,
+  onDownload,
+  showDelete = false,
+  isDangerPending = false,
+  onDelete,
+}: {
+  submissions: Array<{ id: string; displayName: string; fileCount: number; createdAt: string; kind: string }>;
+  selectedKey: string | null;
+  onSelect: (id: string) => void;
+  onDownload: (id: string) => void;
+  showDelete?: boolean;
+  isDangerPending?: boolean;
+  onDelete?: (id: string, name: string) => void;
+}) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Files</th>
+            <th>Uploaded</th>
+            <th style={{ textAlign: "right" }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {submissions.map((s) => (
+            <tr
+              key={s.id}
+              style={{ background: selectedKey === `submission:${s.id}` ? "var(--brand-soft)" : undefined }}
+            >
+              <td style={{ fontWeight: 600, fontSize: "0.875rem" }}>{s.displayName}</td>
+              <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }}>{s.fileCount}</td>
+              <td style={{ fontSize: "0.8rem" }}>{formatDateTime(s.createdAt)}</td>
+              <td style={{ textAlign: "right" }}>
+                <div style={{ display: "inline-flex", gap: "0.4rem" }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => onSelect(s.id)} title="View">
+                    <Eye size={13} />
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => onDownload(s.id)} title="Download">
+                    <Download size={13} />
+                  </button>
+                  {showDelete && onDelete && (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      disabled={isDangerPending}
+                      onClick={() => onDelete(s.id, s.displayName)}
+                      style={{ color: "var(--accent-red)", borderColor: "var(--accent-red)" }}
+                      title="Delete"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PairSection({
+  assignmentId,
+  title,
+  description,
+  pairs,
+}: {
+  assignmentId: string;
+  title: string;
+  description: string;
+  pairs: SuspiciousPairListItem[];
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, margin: 0 }}>{title}</h3>
+          <p style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", marginTop: "0.15rem" }}>{description}</p>
+        </div>
+        <span
+          style={{
+            fontSize: "0.7rem",
+            background: "var(--bg-surface-highest)",
+            padding: "0.1rem 0.45rem",
+            borderRadius: "var(--radius-full)",
+            fontWeight: 700,
+            color: "var(--text-secondary)",
+          }}
+        >
+          {pairs.length}
+        </span>
+      </div>
+
+      <div className="glass-card" style={{ overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Left</th>
+                <th>Right</th>
+                <th>Code Sim</th>
+                <th>Comments</th>
+                <th>Matches</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pairs.map((pair) => (
+                <tr key={pair.id}>
+                  <td>
+                    <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>{pair.leftSubmission.displayName}</div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>{capitalizeLabel(pair.leftSubmission.kind)}</div>
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>{pair.rightSubmission.displayName}</div>
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-tertiary)" }}>{capitalizeLabel(pair.rightSubmission.kind)}</div>
+                  </td>
+                  <td>
+                    <div style={{ fontWeight: 700, fontSize: "0.875rem", color: pair.similarityScore >= CODE_SUSPICIOUS_THRESHOLD ? "var(--accent-red)" : "var(--text-primary)" }}>
+                      {formatSimilarityPercent(pair.similarityScore)}
+                    </div>
+                    <div className="score-bar-wrap" style={{ width: 64, marginTop: "0.25rem" }}>
+                      <div
+                        className="score-bar-fill"
+                        style={{
+                          width: `${Math.round(pair.similarityScore * 100)}%`,
+                          background: pair.similarityScore >= CODE_SUSPICIOUS_THRESHOLD ? "var(--accent-red)" : "var(--brand)",
+                        }}
+                      />
+                    </div>
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }}>{pair.commentMatchCount}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.875rem" }}>{pair.matchCount}</td>
+                  <td>
+                    <Link
+                      href={`/professor/assignments/${assignmentId}/pairs/${pair.id}`}
+                      className="btn btn-outline btn-sm"
+                      style={{ textDecoration: "none" }}
+                    >
+                      <Eye size={13} /> Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Helpers ──
+
+function getBadgeClass(status?: string | null) {
+  const s = status?.toLowerCase() ?? "";
+  if (!s) return "";
+  if (s === "ready" || s === "completed") return "badge-ready";
+  if (s === "failed") return "badge-failed";
+  if (s === "running" || s === "processing" || s === "queued" || s === "received") return "badge-running";
+  return "";
 }
 
 function formatDateTime(value: string) {
@@ -1236,159 +1373,41 @@ function formatDateTime(value: string) {
 }
 
 function toDateTimeLocalInputValue(value: string | null | undefined) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  const hours = `${date.getHours()}`.padStart(2, "0");
-  const minutes = `${date.getMinutes()}`.padStart(2, "0");
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function formatUploadPurpose(purpose: string) {
-  if (purpose === "historical_submission") {
-    return "Historical submissions";
-  }
-
-  if (purpose === "template_upload") {
-    return "Template code";
-  }
-
+  if (purpose === "historical_submission") return "Historical Submissions";
+  if (purpose === "template_upload") return "Template Code";
   return capitalizeLabel(purpose.replace(/[_-]+/g, " "));
 }
 
-function formatStatusLabel(status: string) {
-  return capitalizeLabel(status.replace(/[_-]+/g, " "));
-}
-
-function getStatusClassName(status?: string | null) {
-  const normalized = status?.toLowerCase() ?? "";
-
-  if (!normalized) {
-    return "";
-  }
-
-  if (normalized.includes("ready") || normalized.includes("completed") || normalized.includes("active")) {
-    return "is-ready";
-  }
-
-  if (normalized.includes("failed")) {
-    return "is-failed";
-  }
-
-  if (normalized.includes("running") || normalized.includes("processing")) {
-    return "is-running";
-  }
-
-  if (normalized.includes("queued")) {
-    return "is-queued";
-  }
-
-  return "";
-}
-
 function getUploadSummary(status: string, errorMessage: string | null) {
-  if (errorMessage) {
-    return summarizeMessage(errorMessage, "There was a problem with this upload.");
-  }
-
-  const normalized = status.toLowerCase();
-
-  if (normalized === "ready" || normalized === "completed") {
-    return "This upload finished successfully.";
-  }
-
-  if (normalized === "failed") {
-    return "This upload did not finish successfully.";
-  }
-
-  if (normalized === "queued") {
-    return "This upload is waiting to be processed.";
-  }
-
-  if (normalized === "processing" || normalized === "running") {
-    return "This upload is still being processed.";
-  }
-
+  if (errorMessage) return errorMessage.trim().slice(0, 120);
+  const s = status.toLowerCase();
+  if (s === "ready" || s === "completed") return "This upload finished successfully.";
+  if (s === "failed") return "This upload did not finish successfully.";
+  if (s === "queued") return "Waiting to be processed.";
+  if (s === "processing" || s === "running") return "Still being processed.";
   return "Status updated.";
 }
 
 function formatSimilarityPercent(value: number | null) {
-  if (value === null) {
-    return "N/A";
-  }
-
+  if (value === null) return "N/A";
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function PairSection({
-  assignmentId,
-  description,
-  pairs,
-  title,
-}: {
-  assignmentId: string;
-  description: string;
-  pairs: SuspiciousPairListItem[];
-  title: string;
-}) {
-  return (
-    <section className="surface-muted stack-sm">
-      <div className="stack-sm">
-        <div className="section-heading">
-          <h3>{title}</h3>
-          <span className="status-badge">{pairs.length}</span>
-        </div>
-        <p className="pair-note">{description}</p>
-      </div>
+function capitalizeLabel(value: string) {
+  return value.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
-      <div className="pair-table">
-        <div className="pair-table-head">
-          <span>Left</span>
-          <span>Right</span>
-          <span>Scores</span>
-          <span>Matches</span>
-          <span>Viewer</span>
-        </div>
-        {pairs.map((pair) => (
-          <div className="pair-table-row" key={pair.id}>
-            <div className="stack-sm">
-              <strong>{pair.leftSubmission.displayName}</strong>
-              <span className="pair-note">{capitalizeLabel(pair.leftSubmission.kind)}</span>
-            </div>
-            <div className="stack-sm">
-              <strong>{pair.rightSubmission.displayName}</strong>
-              <span className="pair-note">{capitalizeLabel(pair.rightSubmission.kind)}</span>
-            </div>
-            <div className="pair-score-stack">
-              <span className="pair-score-line">
-                <strong>Code</strong> {formatSimilarityPercent(pair.similarityScore)}
-              </span>
-              <span className="pair-score-line">
-                <strong>Comment matches</strong> {pair.commentMatchCount}
-              </span>
-            </div>
-            <span className="pair-value">{pair.matchCount}</span>
-            <Link
-              className="secondary-button as-link"
-              href={`/professor/assignments/${assignmentId}/pairs/${pair.id}`}
-            >
-              Open
-            </Link>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+function isLikelyJunkFile(relativePath: string, archivePath?: string) {
+  const c = `${relativePath} ${archivePath ?? ""}`;
+  return /(^|[\\/])__macosx([\\/]|$)|(^|[\\/])\._|(^|[\\/])\.ds_store$|thumbs\.db$/i.test(c);
 }
 
 type SuspiciousPairListItem = {
@@ -1397,57 +1416,22 @@ type SuspiciousPairListItem = {
   commentMatchCount: number;
   matchedTokenCount: number;
   matchCount: number;
-  leftSubmission: {
-    id: string;
-    displayName: string;
-    kind: "current" | "historical";
-  };
-  rightSubmission: {
-    id: string;
-    displayName: string;
-    kind: "current" | "historical";
-  };
+  leftSubmission: { id: string; displayName: string; kind: "current" | "historical" };
+  rightSubmission: { id: string; displayName: string; kind: "current" | "historical" };
 };
 
 function partitionSuspiciousPairs(pairs: SuspiciousPairListItem[]) {
-  const indexedPairs = pairs.map((pair, index) => ({ pair, index }));
-  const codeSuspicious = indexedPairs
+  const indexed = pairs.map((pair, index) => ({ pair, index }));
+  const codeSuspicious = indexed
     .filter(({ pair }) => pair.similarityScore >= CODE_SUSPICIOUS_THRESHOLD)
-    .sort((left, right) =>
-      compareSuspiciousPairs(
-        left,
-        right,
-        [
-          (pair) => pair.similarityScore,
-          (pair) => pair.matchedTokenCount,
-          (pair) => pair.commentMatchCount,
-        ],
-      ),
-    )
+    .sort((a, b) => b.pair.similarityScore - a.pair.similarityScore)
     .map(({ pair }) => pair);
-  const commentSupportedLowCode = indexedPairs
-    .filter(
-      ({ pair }) =>
-        pair.similarityScore < CODE_SUSPICIOUS_THRESHOLD && pair.commentMatchCount >= 1,
-    )
-    .sort((left, right) =>
-      compareSuspiciousPairs(
-        left,
-        right,
-        [
-          (pair) => pair.commentMatchCount,
-          (pair) => pair.similarityScore,
-          (pair) => pair.matchedTokenCount,
-        ],
-      ),
-    )
+  const commentSupportedLowCode = indexed
+    .filter(({ pair }) => pair.similarityScore < CODE_SUSPICIOUS_THRESHOLD && pair.commentMatchCount >= 1)
+    .sort((a, b) => b.pair.commentMatchCount - a.pair.commentMatchCount)
     .map(({ pair }) => pair);
-  const hiddenPairs = indexedPairs
-    .filter(
-      ({ pair }) =>
-        pair.similarityScore < CODE_SUSPICIOUS_THRESHOLD && pair.commentMatchCount < 1,
-    )
-    .sort((left, right) => left.index - right.index)
+  const hiddenPairs = indexed
+    .filter(({ pair }) => pair.similarityScore < CODE_SUSPICIOUS_THRESHOLD && pair.commentMatchCount < 1)
     .map(({ pair }) => pair);
 
   return {
@@ -1457,57 +1441,4 @@ function partitionSuspiciousPairs(pairs: SuspiciousPairListItem[]) {
     shownCount: codeSuspicious.length + commentSupportedLowCode.length,
     totalCount: pairs.length,
   };
-}
-
-function compareSuspiciousPairs(
-  left: { pair: SuspiciousPairListItem; index: number },
-  right: { pair: SuspiciousPairListItem; index: number },
-  selectors: Array<(pair: SuspiciousPairListItem) => number>,
-) {
-  for (const selector of selectors) {
-    const difference = selector(right.pair) - selector(left.pair);
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-
-  return left.index - right.index;
-}
-
-function summarizeMessage(message: string, fallback: string) {
-  const trimmed = message.trim();
-  if (!trimmed) {
-    return fallback;
-  }
-
-  if (!shouldCollapseMessage(trimmed)) {
-    return trimmed;
-  }
-
-  const firstLine = trimmed.split(/\r?\n/, 1)[0]?.trim() ?? "";
-  if (firstLine && firstLine.length <= 120 && !looksTechnical(firstLine)) {
-    return firstLine;
-  }
-
-  return fallback;
-}
-
-function shouldCollapseMessage(message: string) {
-  const trimmed = message.trim();
-  return trimmed.length > 120 || /[\r\n]/.test(trimmed) || looksTechnical(trimmed);
-}
-
-function looksTechnical(message: string) {
-  return /(exception|traceback|stack|invalid byte sequence|prisma|postgres|errno| at |\\|\/|0x[0-9a-f]+)/i.test(
-    message,
-  );
-}
-
-function isLikelyJunkFile(relativePath: string, archivePath?: string) {
-  const candidate = `${relativePath} ${archivePath ?? ""}`;
-  return /(^|[\\/])__macosx([\\/]|$)|(^|[\\/])\._|(^|[\\/])\.ds_store$|thumbs\.db$/i.test(candidate);
-}
-
-function capitalizeLabel(value: string) {
-  return value.replace(/\b\w/g, (character) => character.toUpperCase());
 }

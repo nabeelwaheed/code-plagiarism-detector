@@ -1,8 +1,10 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import { Lock, Mail } from "lucide-react";
 import { login } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
 
@@ -17,10 +19,7 @@ export function LoginForm() {
   const currentUserQuery = useCurrentUserQuery();
 
   useEffect(() => {
-    if (!currentUserQuery.data) {
-      return;
-    }
-
+    if (!currentUserQuery.data) return;
     router.replace(currentUserQuery.data.role === "professor" ? "/professor" : "/");
   }, [currentUserQuery.data, router]);
 
@@ -37,25 +36,75 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="panel form-stack">
-      <label className="field">
-        <span>Email</span>
-        <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" />
-      </label>
-      <label className="field">
-        <span>Password</span>
-        <input
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          type="password"
-        />
-      </label>
-      <button className="primary-button" disabled={loginMutation.isPending} type="submit">
-        {loginMutation.isPending ? "Signing in..." : "Sign in"}
-      </button>
-      {loginMutation.error ? (
-        <p className="error-text">{loginMutation.error.message}</p>
-      ) : null}
-    </form>
+    <div
+      className="glass-panel animate-fade-in"
+      style={{ maxWidth: 420, margin: "0 auto", padding: "2rem" }}
+    >
+      {/* Header */}
+      <div style={{ marginBottom: "1.75rem", textAlign: "center" }}>
+        <h1 style={{ fontSize: "1.5rem", marginBottom: "0.35rem" }}>Instructor Sign In</h1>
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.88rem" }}>
+          Manage assignments, upload material, and review suspicious pairs.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <div className="form-group">
+          <label className="form-label" htmlFor="login-email">Email</label>
+          <div className="input-with-icon">
+            <Mail />
+            <input
+              id="login-email"
+              className="form-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@university.edu"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label" htmlFor="login-password">Password</label>
+          <div className="input-with-icon">
+            <Lock />
+            <input
+              id="login-password"
+              className="form-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </div>
+        </div>
+
+        <button
+          className="btn btn-primary"
+          disabled={loginMutation.isPending}
+          type="submit"
+          style={{ width: "100%", marginTop: "0.25rem" }}
+        >
+          {loginMutation.isPending ? "Signing in..." : "Sign In"}
+        </button>
+
+        {loginMutation.error && (
+          <div className="alert alert-error">
+            {loginMutation.error.message}
+          </div>
+        )}
+      </form>
+
+      <hr className="divider" style={{ margin: "1.25rem 0" }} />
+
+      <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+        Need an account?{" "}
+        <Link href="/signup" className="text-brand" style={{ fontWeight: 600 }}>
+          Create a professor account
+        </Link>
+      </p>
+    </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, FileArchive, Lock, Mail, Upload, User } from "lucide-react";
 import {
   getPublicUploadBatch,
   getSubmissionIdentityPublicKey,
@@ -14,14 +15,67 @@ import {
   normalizeAssignmentKey,
 } from "../lib/submission-identity";
 
+function FileDropInput({
+  accept,
+  file,
+  onChange,
+}: {
+  accept: string;
+  file: File | null;
+  onChange: (f: File | null) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+
+  return (
+    <label
+      className={`upload-drop-area ${dragging ? "drag-over" : ""}`}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) onChange(f);
+      }}
+    >
+      <input
+        type="file"
+        accept={accept}
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+      />
+      <FileArchive size={28} style={{ margin: "0 auto 0.6rem", opacity: 0.5 }} />
+      {file ? (
+        <div>
+          <strong style={{ fontSize: "0.9rem" }}>{file.name}</strong>
+          <p style={{ fontSize: "0.78rem", marginTop: "0.25rem", opacity: 0.7 }}>
+            {(file.size / 1024).toFixed(0)} KB — Click or drag to replace
+          </p>
+        </div>
+      ) : (
+        <div>
+          <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>Drop your .zip file here</p>
+          <p style={{ fontSize: "0.78rem", marginTop: "0.25rem", opacity: 0.7 }}>
+            or click to browse
+          </p>
+        </div>
+      )}
+    </label>
+  );
+}
+
 export function StudentSubmissionPanel() {
-  const [studentName, setStudentName] = useState("");
+  const [studentName, setStudentName] = useState(
+    process.env.NODE_ENV === "production" ? "" : "",
+  );
   const [studentNumber, setStudentNumber] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
   const [assignmentKey, setAssignmentKey] = useState(
     process.env.NODE_ENV === "production" ? "" : "demo-key-1234",
   );
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // Bulk upload — collapsed by default for cleaner UX
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkAssignmentKey, setBulkAssignmentKey] = useState(
     process.env.NODE_ENV === "production" ? "" : "demo-key-1234",
   );
@@ -32,13 +86,10 @@ export function StudentSubmissionPanel() {
   const uploadMutation = useMutation({
     mutationFn: async () => {
       const encryptionKey = await getSubmissionIdentityPublicKey();
-      const encryptedIdentity = await encryptSubmissionIdentity({
-        studentName,
-        studentNumber,
-        studentEmail,
-        assignmentKey,
-      }, encryptionKey);
-
+      const encryptedIdentity = await encryptSubmissionIdentity(
+        { studentName, studentNumber, studentEmail, assignmentKey },
+        encryptionKey,
+      );
       return uploadPublicStudentArchive({
         assignmentKey: normalizeAssignmentKey(assignmentKey),
         encryptedIdentity,
@@ -76,218 +127,299 @@ export function StudentSubmissionPanel() {
   });
 
   const uploadSummary = useMemo(() => uploadStatusQuery.data, [uploadStatusQuery.data]);
+
   const isSubmitEnabled =
-    Boolean(selectedFile)
-    && Boolean(studentName.trim())
-    && Boolean(studentNumber.trim())
-    && Boolean(assignmentKey.trim());
+    Boolean(selectedFile) &&
+    Boolean(studentName.trim()) &&
+    Boolean(studentNumber.trim()) &&
+    Boolean(assignmentKey.trim());
+
   const isBulkSubmitEnabled =
-    Boolean(selectedBulkFile)
-    && Boolean(bulkAssignmentKey.trim());
+    Boolean(selectedBulkFile) && Boolean(bulkAssignmentKey.trim());
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedFile || !studentName.trim() || !studentNumber.trim() || !assignmentKey.trim()) {
-      return;
-    }
-
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!isSubmitEnabled) return;
     uploadMutation.mutate();
   };
 
-  const handleBulkSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!selectedBulkFile || !bulkAssignmentKey.trim()) {
-      return;
-    }
-
+  const handleBulkSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!isBulkSubmitEnabled) return;
     bulkUploadMutation.mutate();
   };
 
+  const statusBadge = uploadSummary?.status;
+
   return (
-    <div className="page-stack">
-      <section className="hero-card">
-        <div>
-          <p className="eyebrow">Student Submission</p>
-          <h1>Submit one zip archive to one assignment keyID</h1>
-          <p>
-            Enter your student details, provide the assignment keyID, and upload one zip archive.
-            The app encrypts your identifying information in your browser before anything is sent
-            to the server.
-          </p>
-        </div>
-        <div className="hero-actions">
-          <Link className="secondary-button as-link" href="/login">
-            Professor sign in
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        padding: "2rem 1rem 3rem",
+      }}
+    >
+      {/* Page header */}
+      <div style={{ maxWidth: 640, width: "100%", marginBottom: "1.75rem", textAlign: "center" }}>
+        <p
+          style={{
+            fontSize: "0.75rem",
+            fontWeight: 700,
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: "var(--brand)",
+            marginBottom: "0.5rem",
+          }}
+        >
+          Student Submission
+        </p>
+        <h1 style={{ fontSize: "clamp(1.6rem, 4vw, 2.2rem)", lineHeight: 1.15, marginBottom: "0.6rem" }}>
+          Submit Your Assignment
+        </h1>
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem", maxWidth: 500, margin: "0 auto 1rem" }}>
+          Enter your details, provide the assignment key, and upload your zip. Your identity is
+          encrypted in your browser before anything is sent to the server.
+        </p>
+        <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem" }}>
+          <Link href="/login" className="btn btn-outline btn-sm">
+            Instructor Access
           </Link>
-          <Link className="primary-button as-link" href="/signup">
-            Professor sign up
-          </Link>
         </div>
-      </section>
+      </div>
 
-      <section className="panel">
-        <div className="stack-sm">
-          <div>
-            <p className="eyebrow">Normal flow</p>
-            <h2>Single student submission</h2>
+      {/* Main submission card */}
+      <div className="glass-panel animate-fade-in" style={{ maxWidth: 560, width: "100%", padding: "1.75rem" }}>
+        <h2 style={{ fontSize: "1.1rem", marginBottom: "1.25rem" }}>Submission Form</h2>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="s-name">
+                Full Name <span style={{ color: "var(--accent-red)" }}>*</span>
+              </label>
+              <div className="input-with-icon">
+                <User />
+                <input
+                  id="s-name"
+                  className="form-input"
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  placeholder="Jane Student"
+                  required
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="s-number">
+                Student Number <span style={{ color: "var(--accent-red)" }}>*</span>
+              </label>
+              <input
+                id="s-number"
+                className="form-input"
+                value={studentNumber}
+                onChange={(e) => setStudentNumber(e.target.value)}
+                placeholder="1234567"
+                required
+              />
+            </div>
           </div>
-          <p className="subtle-text">
-            Use this form for the normal one-student, one-zip submission flow.
-          </p>
-        </div>
 
-        <form className="form-stack" onSubmit={handleSubmit}>
-          <label className="field">
-            <span>
-              Student name <span className="required-mark">*</span>
-            </span>
+          <div className="form-group">
+            <label className="form-label" htmlFor="s-email">
+              Email <span style={{ color: "var(--text-tertiary)", fontWeight: 400 }}>(optional)</span>
+            </label>
+            <div className="input-with-icon">
+              <Mail />
+              <input
+                id="s-email"
+                className="form-input"
+                type="email"
+                value={studentEmail}
+                onChange={(e) => setStudentEmail(e.target.value)}
+                placeholder="your@email.com"
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="s-key">
+              Assignment Key <span style={{ color: "var(--accent-red)" }}>*</span>
+            </label>
             <input
-              value={studentName}
-              onChange={(event) => setStudentName(event.target.value)}
-              placeholder="Jane Student"
-            />
-          </label>
-          <label className="field">
-            <span>
-              Student number <span className="required-mark">*</span>
-            </span>
-            <input
-              value={studentNumber}
-              onChange={(event) => setStudentNumber(event.target.value)}
-              placeholder="1234567"
-            />
-          </label>
-          <label className="field">
-            <span>Student email</span>
-            <input
-              value={studentEmail}
-              onChange={(event) => setStudentEmail(event.target.value)}
-              placeholder="Optional"
-              type="email"
-            />
-          </label>
-          <p className="muted-text">
-            Optional email is encrypted and submitted only if you provide it.
-          </p>
-          <label className="field">
-            <span>
-              Assignment keyID <span className="required-mark">*</span>
-            </span>
-            <input
+              id="s-key"
+              className="form-input"
               value={assignmentKey}
-              onChange={(event) => setAssignmentKey(event.target.value)}
-              placeholder="Enter your assignment key"
+              onChange={(e) => setAssignmentKey(e.target.value)}
+              placeholder="Enter the key given by your instructor"
+              required
+              style={{ fontFamily: "var(--font-mono)", fontSize: "0.88rem" }}
             />
-          </label>
-          <label className="field">
-            <span>
-              Zip archive <span className="required-mark">*</span>
-            </span>
-            <input
-              type="file"
-              accept=".zip"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Zip Archive <span style={{ color: "var(--accent-red)" }}>*</span>
+            </label>
+            <FileDropInput accept=".zip" file={selectedFile} onChange={setSelectedFile} />
+          </div>
+
           <button
-            className="primary-button"
+            className="btn btn-primary"
             disabled={uploadMutation.isPending || !isSubmitEnabled}
             type="submit"
+            style={{ width: "100%", marginTop: "0.25rem" }}
           >
-            {uploadMutation.isPending ? "Uploading..." : "Submit zip"}
+            <Upload size={16} />
+            {uploadMutation.isPending ? "Encrypting & Uploading..." : "Submit Assignment"}
           </button>
-          {uploadMutation.error ? <p className="error-text">{uploadMutation.error.message}</p> : null}
-        </form>
-      </section>
 
-      <section className="panel">
-        <div className="stack-sm">
-          <div>
-            <p className="eyebrow">TA / Marker convenience flow</p>
-            <h2>Bulk current submissions upload</h2>
-          </div>
-          <p className="subtle-text">
-            Testing/demo only. Upload one parent zip that contains direct child zip files, where
-            each direct child zip becomes one current submission.
+          {uploadMutation.error && (
+            <div className="alert alert-error">{uploadMutation.error.message}</div>
+          )}
+        </form>
+
+        {/* Privacy note */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginTop: "1.25rem", padding: "0.75rem", background: "var(--bg-surface-raised)", borderRadius: "var(--radius-md)" }}>
+          <Lock size={13} style={{ marginTop: "0.15rem", flexShrink: 0, color: "var(--text-tertiary)" }} />
+          <p style={{ fontSize: "0.78rem", color: "var(--text-tertiary)", margin: 0, lineHeight: 1.5 }}>
+            Your name, student number, and email are encrypted using your institution&apos;s public key
+            before submission. Only the instructor can decrypt your identity.
           </p>
-          <div className="surface-muted stack-sm">
-            <strong>Important</strong>
-            <p className="muted-text">
-              For this bulk route, each child zip filename stem becomes the professor-visible
-              submission name. Do not include full names in child zip filenames unless you want
-              those names shown to the professor.
-            </p>
-          </div>
         </div>
+      </div>
 
-        <form className="form-stack" onSubmit={handleBulkSubmit}>
-          <label className="field">
-            <span>
-              Assignment keyID <span className="required-mark">*</span>
+      {/* Upload status */}
+      {uploadSummary && (
+        <div
+          className="glass-card animate-fade-in"
+          style={{ maxWidth: 560, width: "100%", padding: "1.25rem", marginTop: "1rem" }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <h3 style={{ fontSize: "0.95rem", margin: 0 }}>Submission Status</h3>
+            <span
+              className={`status-badge ${
+                statusBadge === "ready" ? "badge-ready" :
+                statusBadge === "failed" ? "badge-failed" :
+                "badge-running"
+              }`}
+            >
+              {statusBadge}
             </span>
-            <input
-              value={bulkAssignmentKey}
-              onChange={(event) => setBulkAssignmentKey(event.target.value)}
-              placeholder="Enter your assignment key"
-            />
-          </label>
-          <label className="field">
-            <span>
-              Parent zip archive <span className="required-mark">*</span>
-            </span>
-            <input
-              type="file"
-              accept=".zip"
-              onChange={(event) => setSelectedBulkFile(event.target.files?.[0] ?? null)}
-            />
-          </label>
-          {selectedBulkFile ? (
-            <p className="muted-text">Selected parent zip: {selectedBulkFile.name}</p>
+          </div>
+          {uploadSummary.errorMessage && (
+            <div className="alert alert-error" style={{ marginBottom: "0.75rem" }}>
+              {uploadSummary.errorMessage}
+            </div>
+          )}
+          {uploadSummary.submissions.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+              {uploadSummary.submissions.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    fontSize: "0.85rem",
+                    color: "var(--text-secondary)",
+                    padding: "0.4rem 0.6rem",
+                    background: "var(--bg-surface-raised)",
+                    borderRadius: "var(--radius-sm)",
+                  }}
+                >
+                  <FileArchive size={13} />
+                  <span style={{ fontWeight: 600 }}>{s.displayName}</span>
+                  <span className="status-badge badge-ready" style={{ marginLeft: "auto", fontSize: "0.65rem", padding: "0.1rem 0.4rem" }}>
+                    {s.kind}
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : (
-            <p className="muted-text">
-              Expected structure: one parent zip with direct child zip files, one child zip per
-              submission.
+            <p style={{ fontSize: "0.85rem", color: "var(--text-tertiary)" }}>
+              Your archive is being prepared. This usually takes a few seconds.
             </p>
           )}
-          <button
-            className="secondary-button"
-            disabled={bulkUploadMutation.isPending || !isBulkSubmitEnabled}
-            type="submit"
-          >
-            {bulkUploadMutation.isPending ? "Uploading..." : "Upload bulk current submissions"}
-          </button>
-          {bulkUploadMutation.error ? (
-            <p className="error-text">{bulkUploadMutation.error.message}</p>
-          ) : null}
-          {uploadStatusQuery.error ? (
-            <p className="error-text">{uploadStatusQuery.error.message}</p>
-          ) : null}
-        </form>
-      </section>
+        </div>
+      )}
 
-      {uploadSummary ? (
-        <section className="panel">
-          <p className="eyebrow">Latest Upload</p>
-          <h2>Preparation status</h2>
-          <p>
-            Status: <strong>{uploadSummary.status}</strong>
-          </p>
-          {uploadSummary.errorMessage ? (
-            <p className="error-text">{uploadSummary.errorMessage}</p>
-          ) : null}
-          {uploadSummary.submissions.length > 0 ? (
-            <ul className="compact-list">
-              {uploadSummary.submissions.map((submission) => (
-                <li key={submission.id}>
-                  {submission.displayName} ({submission.kind})
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>The archive is still being prepared or queued for comparison.</p>
-          )}
-        </section>
-      ) : null}
+      {/* Bulk upload — accordion */}
+      <div
+        className="glass-card"
+        style={{ maxWidth: 560, width: "100%", marginTop: "1rem", overflow: "hidden" }}
+      >
+        <button
+          className="accordion-trigger"
+          onClick={() => setBulkOpen((v) => !v)}
+          type="button"
+        >
+          <span>Bulk Upload (TA / Marker Flow)</span>
+          {bulkOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {bulkOpen && (
+          <div style={{ padding: "0 1rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+            <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+              Upload one parent zip containing child zip files — one per submission. Each child zip
+              filename stem becomes the visible submission name.
+            </p>
+            <div
+              style={{
+                padding: "0.75rem",
+                background: "var(--accent-yellow-soft)",
+                border: "1px solid rgba(217,119,6,0.2)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "0.8rem",
+                color: "#92400e",
+              }}
+            >
+              <strong>Note:</strong> Do not include student names in child zip filenames unless you
+              want those names visible to the instructor.
+            </div>
+
+            <form onSubmit={handleBulkSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.9rem" }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="b-key">
+                  Assignment Key <span style={{ color: "var(--accent-red)" }}>*</span>
+                </label>
+                <input
+                  id="b-key"
+                  className="form-input"
+                  value={bulkAssignmentKey}
+                  onChange={(e) => setBulkAssignmentKey(e.target.value)}
+                  placeholder="Enter assignment key"
+                  required
+                  style={{ fontFamily: "var(--font-mono)", fontSize: "0.88rem" }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Parent Zip Archive <span style={{ color: "var(--accent-red)" }}>*</span>
+                </label>
+                <FileDropInput accept=".zip" file={selectedBulkFile} onChange={setSelectedBulkFile} />
+              </div>
+
+              <button
+                className="btn btn-outline"
+                disabled={bulkUploadMutation.isPending || !isBulkSubmitEnabled}
+                type="submit"
+                style={{ width: "100%" }}
+              >
+                <Upload size={15} />
+                {bulkUploadMutation.isPending ? "Uploading..." : "Upload Bulk Archive"}
+              </button>
+
+              {bulkUploadMutation.error && (
+                <div className="alert alert-error">{bulkUploadMutation.error.message}</div>
+              )}
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
