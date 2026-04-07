@@ -77,6 +77,15 @@ export async function persistPreparedSubmissions(
       where: { id: uploadBatchId },
       data: { status: "READY" },
     });
+
+    await tx.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        comparisonInputVersion: {
+          increment: 1,
+        },
+      },
+    });
   });
 }
 
@@ -125,6 +134,15 @@ export async function persistPreparedTemplate(
     await tx.uploadBatch.update({
       where: { id: uploadBatchId },
       data: { status: "READY" },
+    });
+
+    await tx.assignment.update({
+      where: { id: assignmentId },
+      data: {
+        comparisonInputVersion: {
+          increment: 1,
+        },
+      },
     });
   });
 }

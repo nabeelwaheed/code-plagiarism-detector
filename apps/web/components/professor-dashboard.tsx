@@ -72,11 +72,13 @@ function AssignmentCard({
     }
   };
 
-  const runStatus = assignment.latestComparisonRun?.status ?? null;
+  const runStatus = assignment.comparisonStatus;
   const runStatusClass =
-    runStatus === "completed" ? "badge-completed" :
+    runStatus === "current" || runStatus === "ready" ? "badge-completed" :
+    runStatus === "stale" ? "badge-stale" :
+    runStatus === "not_ready" ? "badge-not-ready" :
     runStatus === "failed"    ? "badge-failed" :
-    runStatus === "running" || runStatus === "queued" ? "badge-running" : "";
+    runStatus === "running" || runStatus === "preparing" || runStatus === "queued" ? "badge-running" : "";
 
   return (
     <div
@@ -95,7 +97,7 @@ function AssignmentCard({
         </div>
         {runStatus && (
           <span className={`status-badge ${runStatusClass}`}>
-            {runStatus}
+            {formatComparisonStatusLabel(runStatus)}
           </span>
         )}
       </div>
@@ -180,6 +182,12 @@ function AssignmentCard({
       </button>
     </div>
   );
+}
+
+function formatComparisonStatusLabel(status: AssignmentSummary["comparisonStatus"]) {
+  if (status === "not_ready") return "not ready";
+  if (status === "ready") return "ready to run";
+  return status.replace(/_/g, " ");
 }
 
 export function ProfessorDashboard({ successMessage }: { successMessage?: string | null }) {

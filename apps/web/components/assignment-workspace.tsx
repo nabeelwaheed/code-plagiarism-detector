@@ -56,12 +56,18 @@ type SelectedArtifact =
 
 const CODE_SUSPICIOUS_THRESHOLD = 0.35;
 
-export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) {
+export function AssignmentWorkspace({
+  assignmentId,
+  initialTab = "submissions",
+}: {
+  assignmentId: string;
+  initialTab?: WorkspaceTab;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("submissions");
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab);
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [trackedUploadBatchId, setTrackedUploadBatchId] = useState<string | null>(null);
@@ -238,7 +244,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const latestVisibleRun = useMemo(
     () =>
       assignmentQuery.data?.comparisonRuns.find(
-        (run) => run.status === "completed" && run.pairResults.length > 0,
+        (run) => run.status === "completed",
       ) ?? assignmentQuery.data?.comparisonRuns[0],
     [assignmentQuery.data],
   );
@@ -284,6 +290,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const templateVersions = assignment.templateVersions;
   const latestUpload = trackedUploadQuery.data ?? assignment.uploadBatches[0] ?? null;
   const activeKey = assignment.keys[0]?.publicKey ?? null;
+  const comparisonStatus = assignment.comparisonStatus;
 
   const currentVsCurrentPairs = latestVisibleRun?.pairResults.filter(
     (p) => p.leftSubmission.kind === "current" && p.rightSubmission.kind === "current",
@@ -300,6 +307,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
   const hasActiveJobs =
     assignment.uploadBatches.some((b) => b.status === "received" || b.status === "processing") ||
     assignment.comparisonRuns.some((r) => r.status === "queued" || r.status === "running");
+  const canRunComparison = assignment.canRunComparison && !rerunMutation.isPending;
   const isDangerPending =
     deleteAssignmentMutation.isPending ||
     deleteSubmissionMutation.isPending ||
@@ -410,10 +418,17 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 )}
                 {latestRun && (
                   <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                    <span className={`status-badge ${getBadgeClass(latestRun.status)}`} style={{ padding: "0.1rem 0.45rem", fontSize: "0.68rem" }}>
-                      {latestRun.status}
+                    <span className={`status-badge ${getBadgeClass(comparisonStatus)}`} style={{ padding: "0.1rem 0.45rem", fontSize: "0.68rem" }}>
+                      {formatComparisonStatusLabel(comparisonStatus)}
                     </span>
-                    {latestRun.pairResults.length} pairs
+                    {latestVisibleRun?.pairResults.length ?? 0} pairs
+                  </span>
+                )}
+                {!latestRun && (
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span className={`status-badge ${getBadgeClass(comparisonStatus)}`} style={{ padding: "0.1rem 0.45rem", fontSize: "0.68rem" }}>
+                      {formatComparisonStatusLabel(comparisonStatus)}
+                    </span>
                   </span>
                 )}
               </div>
@@ -430,7 +445,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
               </button>
               <button
                 className="btn btn-primary"
-                disabled={rerunMutation.isPending || hasActiveJobs}
+                disabled={!canRunComparison}
                 onClick={() => rerunMutation.mutate()}
               >
                 {rerunMutation.isPending ? <Loader2 size={15} className="anim-spin" /> : <Play size={15} fill="currentColor" />}
@@ -777,10 +792,12 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
                     <div>
                       <h2 style={{ fontSize: "1rem", marginBottom: "0.2rem" }}>Comparison Results</h2>
-                      {latestRun ? (
+                      {latestRun || comparisonStatus ? (
                         <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-                          <span className={`status-badge ${getBadgeClass(latestRun.status)}`}>{latestRun.status}</span>
-                          <span>{latestRun.pairResults.length} pairs</span>
+                          <span className={`status-badge ${getBadgeClass(comparisonStatus)}`}>
+                            {formatComparisonStatusLabel(comparisonStatus)}
+                          </span>
+                          <span>{getComparisonStatusDescription(comparisonStatus)}</span>
                         </div>
                       ) : (
                         <p style={{ fontSize: "0.82rem", color: "var(--text-tertiary)" }}>No runs yet.</p>
@@ -788,7 +805,7 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                     </div>
                     <button
                       className="btn btn-primary"
-                      disabled={rerunMutation.isPending || hasActiveJobs}
+                      disabled={!canRunComparison}
                       onClick={() => rerunMutation.mutate()}
                     >
                       {rerunMutation.isPending ? <Loader2 size={14} className="anim-spin" /> : <Play size={14} fill="currentColor" />}
@@ -796,6 +813,18 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                     </button>
                   </div>
                 </div>
+
+                {comparisonStatus === "stale" && (
+                  <div className="alert" style={{ fontSize: "0.85rem" }}>
+                    Results are out of date because assignment inputs changed after the last completed run.
+                  </div>
+                )}
+
+                {comparisonStatus === "failed" && (
+                  <div className="alert alert-error" style={{ fontSize: "0.85rem" }}>
+                    The latest comparison attempt failed. Run comparisons again when you are ready.
+                  </div>
+                )}
 
                 {/* Category switcher */}
                 <div style={{ display: "flex", gap: "0.5rem", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "0.75rem" }}>
@@ -865,8 +894,10 @@ export function AssignmentWorkspace({ assignmentId }: { assignmentId: string }) 
                 ) : (
                   <div className="empty-state">
                     <Database className="empty-state-icon" size={40} />
-                    <h3 style={{ fontSize: "1rem", marginBottom: "0.35rem" }}>No Comparison Results</h3>
-                    <p style={{ fontSize: "0.875rem" }}>Run a comparison to see suspicious pairs.</p>
+                    <h3 style={{ fontSize: "1rem", marginBottom: "0.35rem" }}>
+                      {comparisonStatus === "running" ? "Comparison In Progress" : "No Current Comparison Results"}
+                    </h3>
+                    <p style={{ fontSize: "0.875rem" }}>{getComparisonEmptyStateMessage(comparisonStatus)}</p>
                   </div>
                 )}
               </div>
@@ -1362,10 +1393,37 @@ function PairSection({
 function getBadgeClass(status?: string | null) {
   const s = status?.toLowerCase() ?? "";
   if (!s) return "";
-  if (s === "ready" || s === "completed") return "badge-ready";
+  if (s === "ready" || s === "completed" || s === "current") return "badge-ready";
+  if (s === "stale") return "badge-stale";
+  if (s === "not_ready") return "badge-not-ready";
   if (s === "failed") return "badge-failed";
-  if (s === "running" || s === "processing" || s === "queued" || s === "received") return "badge-running";
+  if (s === "running" || s === "preparing" || s === "processing" || s === "queued" || s === "received") return "badge-running";
   return "";
+}
+
+function formatComparisonStatusLabel(status: string) {
+  if (status === "not_ready") return "not ready";
+  if (status === "ready") return "ready to run";
+  return status.replace(/_/g, " ");
+}
+
+function getComparisonStatusDescription(status: string) {
+  if (status === "preparing") return "Uploads are still being prepared.";
+  if (status === "running") return "A comparison job is in progress.";
+  if (status === "current") return "Current results match the latest prepared inputs.";
+  if (status === "stale") return "Displayed results are from older inputs.";
+  if (status === "failed") return "The latest comparison attempt failed.";
+  if (status === "ready") return "Prepared inputs are ready for a manual run.";
+  if (status === "not_ready") return "More prepared submissions are needed before running.";
+  return "Status updated.";
+}
+
+function getComparisonEmptyStateMessage(status: string) {
+  if (status === "preparing") return "Wait for uploads to finish preparing before running comparisons.";
+  if (status === "running") return "The worker is processing this comparison right now.";
+  if (status === "failed") return "No current results are available because the latest run failed.";
+  if (status === "not_ready") return "At least one current submission and two non-template submissions are required.";
+  return "Run a comparison to see suspicious pairs.";
 }
 
 function formatDateTime(value: string) {

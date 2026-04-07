@@ -27,6 +27,7 @@ import {
 import {
   assertAssignmentHasNoActiveJobs,
   assertProfessorOwnsAssignment,
+  bumpAssignmentComparisonInputVersion,
   clearAssignmentComparisonData,
   promoteNewestRemainingTemplate,
 } from "../assignments/assignment-maintenance.js";
@@ -706,6 +707,8 @@ export class SubmissionsService {
       if (removedUploadBatchKey) {
         objectKeys.add(removedUploadBatchKey);
       }
+
+      await bumpAssignmentComparisonInputVersion(tx, assignmentId);
     });
 
     await deleteObjectKeysBestEffort(objectKeys);
@@ -766,6 +769,8 @@ export class SubmissionsService {
       if (removedUploadBatchKey) {
         objectKeys.add(removedUploadBatchKey);
       }
+
+      await bumpAssignmentComparisonInputVersion(tx, assignmentId);
     });
 
     await deleteObjectKeysBestEffort(objectKeys);
@@ -843,6 +848,8 @@ export class SubmissionsService {
             objectKeys.add(removedUploadBatchKey);
           }
         }
+
+        await bumpAssignmentComparisonInputVersion(tx, assignmentId);
       });
 
       await deleteObjectKeysBestEffort(objectKeys);
@@ -905,6 +912,8 @@ export class SubmissionsService {
             objectKeys.add(removedUploadBatchKey);
           }
         }
+
+        await bumpAssignmentComparisonInputVersion(tx, assignmentId);
       });
 
       await deleteObjectKeysBestEffort(objectKeys);

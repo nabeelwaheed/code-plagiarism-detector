@@ -5,7 +5,6 @@ import type {
 } from "@similarity/shared";
 import { buildDeterministicConcatenation } from "./concat.service.js";
 import { prepareUploadArtifacts } from "./prepare-upload-artifacts.service.js";
-import { enqueueComparisonRunForAssignment } from "./queue-comparison-run.service.js";
 import {
   markUploadBatchFailed,
   markUploadBatchProcessing,
@@ -31,7 +30,6 @@ export async function processUploadPreparationJob(job: UploadPreparationJob) {
 
     if (job.kind === "template" && job.preparedTemplate) {
       await persistPreparedTemplate(job.assignmentId, job.uploadBatchId, job.preparedTemplate);
-      await enqueueComparisonRunForAssignment(job.assignmentId);
       return {
         assignmentId: job.assignmentId,
         uploadBatchId: job.uploadBatchId,
@@ -46,7 +44,6 @@ export async function processUploadPreparationJob(job: UploadPreparationJob) {
         job.uploadBatchId,
         job.preparedSubmissions,
       );
-      await enqueueComparisonRunForAssignment(job.assignmentId);
       return {
         assignmentId: job.assignmentId,
         uploadBatchId: job.uploadBatchId,
@@ -64,7 +61,6 @@ export async function processUploadPreparationJob(job: UploadPreparationJob) {
 
     if (job.kind === "template" && preparedArtifacts.template) {
       await persistPreparedTemplate(job.assignmentId, job.uploadBatchId, preparedArtifacts.template);
-      await enqueueComparisonRunForAssignment(job.assignmentId);
       return {
         assignmentId: job.assignmentId,
         uploadBatchId: job.uploadBatchId,
@@ -79,7 +75,6 @@ export async function processUploadPreparationJob(job: UploadPreparationJob) {
         job.uploadBatchId,
         preparedArtifacts.submissions,
       );
-      await enqueueComparisonRunForAssignment(job.assignmentId);
       return {
         assignmentId: job.assignmentId,
         uploadBatchId: job.uploadBatchId,

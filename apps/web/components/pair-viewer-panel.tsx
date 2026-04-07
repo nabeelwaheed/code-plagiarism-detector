@@ -81,11 +81,11 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
         }}
       >
         <Link
-          href={`/professor/assignments/${pair.assignment.id}`}
+          href={`/professor/assignments/${pair.assignment.id}?tab=pairs`}
           className="btn btn-ghost btn-sm"
           style={{ marginBottom: "0.6rem", padding: "0.25rem 0.5rem", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "0.4rem", textDecoration: "none" }}
         >
-          <ArrowLeft size={15} /> Back to Assignment
+          <ArrowLeft size={15} /> Back to Sus Pairs
         </Link>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
@@ -101,37 +101,50 @@ export function PairViewerPanel({ pairId }: { pairId: string }) {
           </div>
 
           {/* Metric chips */}
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            {similarityPct !== null && (
-              <div
-                style={{
-                  padding: "0.4rem 0.85rem",
-                  borderRadius: "var(--radius-md)",
-                  background: similarityPct >= 35 ? "var(--accent-red-soft)" : "var(--bg-surface-raised)",
-                  border: `1px solid ${similarityPct >= 35 ? "rgba(220,38,38,0.25)" : "var(--border-subtle)"}`,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                }}
-              >
-                <ShieldAlert size={14} color={similarityPct >= 35 ? "var(--accent-red)" : "var(--text-tertiary)"} />
-                <span style={{ fontWeight: 700, fontSize: "0.9rem", color: similarityPct >= 35 ? "var(--accent-red)" : "var(--text-primary)" }}>
-                  {similarityPct}% similar
-                </span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.45rem", maxWidth: 480 }}>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
+              {similarityPct !== null && (
+                <div
+                  style={{
+                    padding: "0.4rem 0.85rem",
+                    borderRadius: "var(--radius-md)",
+                    background: similarityPct >= 35 ? "var(--accent-red-soft)" : "var(--bg-surface-raised)",
+                    border: `1px solid ${similarityPct >= 35 ? "rgba(220,38,38,0.25)" : "var(--border-subtle)"}`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                  }}
+                >
+                  <ShieldAlert size={14} color={similarityPct >= 35 ? "var(--accent-red)" : "var(--text-tertiary)"} />
+                  <span style={{ fontWeight: 700, fontSize: "0.9rem", color: similarityPct >= 35 ? "var(--accent-red)" : "var(--text-primary)" }}>
+                    {similarityPct}% similar
+                  </span>
+                </div>
+              )}
+              <div className="stat-tile" style={{ padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Code2 size={13} color="var(--text-tertiary)" />
+                <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>{pair.matches.length} regions</span>
               </div>
-            )}
-            <div className="stat-tile" style={{ padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <Code2 size={13} color="var(--text-tertiary)" />
-              <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>{pair.matches.length} regions</span>
+              <div className="stat-tile" style={{ padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Hash size={13} color="var(--text-tertiary)" />
+                <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>{pair.matchedTokenCount} tokens</span>
+              </div>
+              <div className="stat-tile" style={{ padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <MessageSquare size={13} color="var(--text-tertiary)" />
+                <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>{pair.commentMatchCount} comments</span>
+              </div>
             </div>
-            <div className="stat-tile" style={{ padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <Hash size={13} color="var(--text-tertiary)" />
-              <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>{pair.matchedTokenCount} tokens</span>
-            </div>
-            <div className="stat-tile" style={{ padding: "0.4rem 0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-              <MessageSquare size={13} color="var(--text-tertiary)" />
-              <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>{pair.commentMatchCount} comments</span>
-            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "0.78rem",
+                lineHeight: 1.45,
+                color: "var(--accent-red)",
+                textAlign: "right",
+              }}
+            >
+              Comment matches do not affect the code similarity score. They are only supporting evidence, such as when copied code is heavily refactored but one or more long comments still match.
+            </p>
           </div>
         </div>
       </div>

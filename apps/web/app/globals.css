@@ -781,6 +781,16 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-green);
 }
 
+.badge-stale {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.badge-not-ready {
+  background: var(--bg-surface-raised);
+  color: var(--text-secondary);
+}
+
 .badge-failed {
   background: var(--accent-red-soft);
   color: var(--accent-red);

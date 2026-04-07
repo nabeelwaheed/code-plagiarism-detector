@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { MatchKind, UploadPurpose } from "@prisma/client";
+import { MatchKind, Prisma, UploadPurpose, UploadBatchStatus, ComparisonRunStatus } from "@prisma/client";
 import { apiRuntimeConfig } from "../../config/runtime-config.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { QueueService } from "../queue/queue.service.js";
@@ -19,21 +19,39 @@ export class ComparisonsService {
   ) {}
 
   async createComparisonRun(payload: CreateComparisonRunDto, user: AuthenticatedUser) {
-    const assignment = await this.prisma.assignment.findUnique({
-      where: { id: payload.assignmentId },
-      include: {
-        submissions: {
-          orderBy: {
-            createdAt: "asc",
+    const [assignment, activeUploadCount, activeComparisonCount] = await Promise.all([
+      this.prisma.assignment.findUnique({
+        where: { id: payload.assignmentId },
+        include: {
+          submissions: {
+            orderBy: {
+              createdAt: "asc",
+            },
+          },
+          templateVersions: {
+            where: { isActive: true },
+            orderBy: { versionNumber: "desc" },
+            take: 1,
           },
         },
-        templateVersions: {
-          where: { isActive: true },
-          orderBy: { versionNumber: "desc" },
-          take: 1,
+      }),
+      this.prisma.uploadBatch.count({
+        where: {
+          assignmentId: payload.assignmentId,
+          status: {
+            in: [UploadBatchStatus.RECEIVED, UploadBatchStatus.PROCESSING],
+          },
         },
-      },
-    });
+      }),
+      this.prisma.comparisonRun.count({
+        where: {
+          assignmentId: payload.assignmentId,
+          status: {
+            in: [ComparisonRunStatus.QUEUED, ComparisonRunStatus.RUNNING],
+          },
+        },
+      }),
+    ]);
 
     if (!assignment) {
       throw new NotFoundException("That assignment no longer exists");
@@ -41,6 +59,18 @@ export class ComparisonsService {
 
     if (assignment.professorId !== user.id) {
       throw new ForbiddenException("You do not have access to this assignment");
+    }
+
+    if (activeUploadCount > 0) {
+      throw new BadRequestException(
+        "Uploads are still being prepared for this assignment. Please wait for them to finish before running comparisons.",
+      );
+    }
+
+    if (activeComparisonCount > 0) {
+      throw new BadRequestException(
+        "A comparison run is already queued or running for this assignment.",
+      );
     }
 
     const currentSubmissionCount = assignment.submissions.filter(
@@ -60,17 +90,29 @@ export class ComparisonsService {
       );
     }
 
-    const comparisonRun = await this.prisma.comparisonRun.create({
-      data: {
-        assignmentId: assignment.id,
-        templateVersionId: assignment.templateVersions[0]?.id,
-        engineVersion: apiRuntimeConfig.engine.version,
-        paramsJson: {
-          gstMinMatchLength: apiRuntimeConfig.engine.gstMinMatchLength,
-          minimumCommentLength: apiRuntimeConfig.engine.minimumCommentLength,
+    let comparisonRun;
+    try {
+      comparisonRun = await this.prisma.comparisonRun.create({
+        data: {
+          assignmentId: assignment.id,
+          templateVersionId: assignment.templateVersions[0]?.id,
+          inputVersion: assignment.comparisonInputVersion,
+          engineVersion: apiRuntimeConfig.engine.version,
+          paramsJson: {
+            gstMinMatchLength: apiRuntimeConfig.engine.gstMinMatchLength,
+            minimumCommentLength: apiRuntimeConfig.engine.minimumCommentLength,
+          },
         },
-      },
-    });
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new BadRequestException(
+          "A comparison run is already queued or running for this assignment.",
+        );
+      }
+
+      throw error;
+    }
 
     await this.queueService.enqueueComparisonRun({
       comparisonRunId: comparisonRun.id,

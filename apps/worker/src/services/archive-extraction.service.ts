@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Buffer } from "node:buffer";
 import { unzipSync } from "fflate";
 import type {
@@ -94,6 +95,9 @@ function visitArchive(input: {
     }
 
     const normalizedEntryPath = normalizeArchiveEntryPath(rawEntryPath);
+    if (isIgnoredArchiveJunk(normalizedEntryPath)) {
+      continue;
+    }
     const entryBuffer = Buffer.from(archive[rawEntryPath] ?? []);
 
     input.state.totalExtractedBytes += entryBuffer.byteLength;
@@ -158,6 +162,20 @@ function normalizeArchiveEntryPath(entryPath: string) {
 
 function isZipFile(entryPath: string) {
   return entryPath.toLowerCase().endsWith(".zip");
+}
+
+function isIgnoredArchiveJunk(entryPath: string) {
+  const segments = entryPath.split("/");
+  const baseName = path.posix.basename(entryPath);
+  const lowerSegments = segments.map((segment) => segment.toLowerCase());
+  const lowerBaseName = baseName.toLowerCase();
+
+  return (
+    lowerSegments.includes("__macosx")
+    || lowerBaseName === ".ds_store"
+    || lowerBaseName === "thumbs.db"
+    || baseName.startsWith("._")
+  );
 }
 
 function isRelevantSourceFile(language: AssignmentLanguage, entryPath: string) {

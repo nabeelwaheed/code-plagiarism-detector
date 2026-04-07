@@ -33,6 +33,8 @@ export interface AssignmentSummary {
     current: number;
     historical: number;
   };
+  comparisonStatus: "not_ready" | "preparing" | "ready" | "running" | "current" | "stale" | "failed";
+  canRunComparison: boolean;
   latestComparisonRun: {
     id: string;
     status: string;
@@ -49,6 +51,8 @@ export interface AssignmentDetail {
   professorId: string;
   createdAt: string;
   updatedAt: string;
+  comparisonStatus: "not_ready" | "preparing" | "ready" | "running" | "current" | "stale" | "failed";
+  canRunComparison: boolean;
   keys: Array<{
     id: string;
     publicKey: string;

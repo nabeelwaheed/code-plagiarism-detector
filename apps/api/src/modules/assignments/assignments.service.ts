@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable } from "@nestjs/common";
-import { AssignmentLanguage } from "@prisma/client";
+import { AssignmentLanguage, ComparisonRunStatus, UploadBatchStatus } from "@prisma/client";
 import { randomBytes } from "node:crypto";
 import { PrismaService } from "../prisma/prisma.service.js";
 import { CreateAssignmentDto } from "./dto/create-assignment.dto.js";
@@ -12,6 +12,7 @@ import {
   deleteAssignmentOwnedData,
   deleteObjectKeysBestEffort,
 } from "./assignment-maintenance.js";
+import { deriveAssignmentComparisonState } from "../comparisons/comparison-status.js";
 
 @Injectable()
 export class AssignmentsService {
@@ -61,6 +62,17 @@ export class AssignmentsService {
           orderBy: { createdAt: "desc" },
           take: 1,
         },
+        uploadBatches: {
+          where: {
+            status: {
+              in: [UploadBatchStatus.RECEIVED, UploadBatchStatus.PROCESSING],
+            },
+          },
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
         submissions: {
           select: {
             id: true,
@@ -69,7 +81,7 @@ export class AssignmentsService {
         },
         comparisonRuns: {
           orderBy: { createdAt: "desc" },
-          take: 1,
+          take: 10,
           include: {
             pairResults: {
               orderBy: { sortOrder: "asc" },
@@ -82,25 +94,56 @@ export class AssignmentsService {
     });
 
     return assignments.map((assignment) => ({
-      id: assignment.id,
-      title: assignment.title,
-      language: assignment.language.toLowerCase(),
-      dueDate: (assignment as AssignmentWithDueDate).dueDate,
-      professorId: assignment.professorId,
-      createdAt: assignment.createdAt,
-      activeKey: assignment.keys[0]?.publicKey ?? null,
-      submissionCounts: {
-        current: assignment.submissions.filter((submission) => submission.kind === "CURRENT").length,
-        historical: assignment.submissions.filter((submission) => submission.kind === "HISTORICAL").length,
-      },
-      latestComparisonRun: assignment.comparisonRuns[0]
-        ? {
-            id: assignment.comparisonRuns[0].id,
-            status: assignment.comparisonRuns[0].status.toLowerCase(),
-            createdAt: assignment.comparisonRuns[0].createdAt,
-            pairCount: assignment.comparisonRuns[0].pairResults.length,
-          }
-        : null,
+      ...(() => {
+        const currentSubmissionCount = assignment.submissions.filter(
+          (submission) => submission.kind === "CURRENT",
+        ).length;
+        const historicalSubmissionCount = assignment.submissions.filter(
+          (submission) => submission.kind === "HISTORICAL",
+        ).length;
+        const comparisonState = deriveAssignmentComparisonState({
+          hasActiveUploads: assignment.uploadBatches.length > 0,
+          hasActiveComparisonRuns: assignment.comparisonRuns.some(
+            (run) =>
+              run.status === ComparisonRunStatus.QUEUED
+              || run.status === ComparisonRunStatus.RUNNING,
+          ),
+          currentSubmissionCount,
+          historicalSubmissionCount,
+          comparisonInputVersion: assignment.comparisonInputVersion,
+          comparisonRuns: assignment.comparisonRuns.map((run) => ({
+            status: run.status,
+            inputVersion: run.inputVersion,
+          })),
+        });
+        const displayComparisonRun = assignment.comparisonRuns.find(
+          (run) => run.status === ComparisonRunStatus.COMPLETED,
+        ) ?? assignment.comparisonRuns[0] ?? null;
+
+        return {
+          id: assignment.id,
+          title: assignment.title,
+          language: assignment.language.toLowerCase(),
+          dueDate: (assignment as AssignmentWithDueDate).dueDate,
+          professorId: assignment.professorId,
+          createdAt: assignment.createdAt,
+          activeKey: assignment.keys[0]?.publicKey ?? null,
+          submissionCounts: {
+            current: currentSubmissionCount,
+            historical: historicalSubmissionCount,
+          },
+          comparisonStatus: comparisonState.status,
+          canRunComparison: comparisonState.canRunComparison,
+          latestComparisonRun: displayComparisonRun
+            ? {
+                id: displayComparisonRun.id,
+                status: displayComparisonRun.status.toLowerCase(),
+                createdAt: displayComparisonRun.createdAt,
+                pairCount: displayComparisonRun.pairResults.length,
+              }
+            : null,
+        };
+      })(),
     }));
   }
 
@@ -171,6 +214,31 @@ export class AssignmentsService {
     }
 
     const activeTemplate = assignment.templateVersions.find((template) => template.isActive) ?? null;
+    const currentSubmissionCount = assignment.submissions.filter(
+      (submission) => submission.kind === "CURRENT",
+    ).length;
+    const historicalSubmissionCount = assignment.submissions.filter(
+      (submission) => submission.kind === "HISTORICAL",
+    ).length;
+    const comparisonState = deriveAssignmentComparisonState({
+      hasActiveUploads: assignment.uploadBatches.some(
+        (batch) =>
+          batch.status === UploadBatchStatus.RECEIVED
+          || batch.status === UploadBatchStatus.PROCESSING,
+      ),
+      hasActiveComparisonRuns: assignment.comparisonRuns.some(
+        (run) =>
+          run.status === ComparisonRunStatus.QUEUED
+          || run.status === ComparisonRunStatus.RUNNING,
+      ),
+      currentSubmissionCount,
+      historicalSubmissionCount,
+      comparisonInputVersion: assignment.comparisonInputVersion,
+      comparisonRuns: assignment.comparisonRuns.map((run) => ({
+        status: run.status,
+        inputVersion: run.inputVersion,
+      })),
+    });
 
     return {
       id: assignment.id,
@@ -180,6 +248,8 @@ export class AssignmentsService {
       professorId: assignment.professorId,
       createdAt: assignment.createdAt,
       updatedAt: assignment.updatedAt,
+      comparisonStatus: comparisonState.status,
+      canRunComparison: comparisonState.canRunComparison,
       keys: assignment.keys.map((key) => ({
         id: key.id,
         publicKey: key.publicKey,

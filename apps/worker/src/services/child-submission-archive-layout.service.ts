@@ -104,11 +104,13 @@ function resolveSingleWrapperFolderChildZipPaths(input: {
 function isIgnoredArchiveJunk(relativePath: string) {
   const segments = relativePath.split("/");
   const baseName = path.posix.basename(relativePath);
+  const lowerSegments = segments.map((segment) => segment.toLowerCase());
+  const lowerBaseName = baseName.toLowerCase();
 
   return (
-    segments.includes("__MACOSX")
-    || baseName === ".DS_Store"
-    || baseName === "Thumbs.db"
+    lowerSegments.includes("__macosx")
+    || lowerBaseName === ".ds_store"
+    || lowerBaseName === "thumbs.db"
     || baseName.startsWith("._")
   );
 }

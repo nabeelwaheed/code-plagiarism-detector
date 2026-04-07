@@ -27,6 +27,7 @@ export async function enqueueComparisonRunForAssignment(assignmentId: string) {
     data: {
       assignmentId,
       templateVersionId: assignment.templateVersions[0]?.id,
+      inputVersion: assignment.comparisonInputVersion,
       engineVersion: workerRuntimeConfig.engineVersion,
       paramsJson: {
         gstMinMatchLength: workerRuntimeConfig.gstMinMatchLength,

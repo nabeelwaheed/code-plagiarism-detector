@@ -171,6 +171,20 @@ export async function clearAssignmentComparisonData(
   });
 }
 
+export async function bumpAssignmentComparisonInputVersion(
+  tx: AssignmentAccessClient,
+  assignmentId: string,
+) {
+  await tx.assignment.update({
+    where: { id: assignmentId },
+    data: {
+      comparisonInputVersion: {
+        increment: 1,
+      },
+    },
+  });
+}
+
 export async function deleteAssignmentOwnedData(
   tx: AssignmentAccessClient,
   assignmentId: string,

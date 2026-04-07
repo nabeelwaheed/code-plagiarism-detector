@@ -70,6 +70,7 @@ model Assignment {
   title                String
   language             AssignmentLanguage
   dueDate              DateTime?
+  comparisonInputVersion Int              @default(0)
   professorId          String
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
@@ -171,6 +172,7 @@ model ComparisonRun {
   id                   String               @id @default(cuid())
   assignmentId         String
   templateVersionId    String?
+  inputVersion         Int                  @default(0)
   status               ComparisonRunStatus  @default(QUEUED)
   engineVersion        String
   paramsJson           Json
