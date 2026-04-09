@@ -38,7 +38,7 @@ services:
       ENGINE_VERSION: 0.1.0
       ENGINE_GST_MIN_MATCH_LENGTH: "8"
       ENGINE_MINIMUM_COMMENT_LENGTH: "12"
-      UPLOAD_MAX_FILE_SIZE_MB: "50"
+      UPLOAD_MAX_FILE_SIZE_MB: "250"
     depends_on:
       - postgres
       - redis

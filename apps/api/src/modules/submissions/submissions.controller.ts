@@ -10,6 +10,11 @@ import {
   Req,
   Res,
 } from "@nestjs/common";
+import {
+  createStagedObjectKey,
+  deleteObject,
+  writeObjectStream,
+} from "@similarity/shared";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { CurrentUser, Public, Roles } from "../auth/auth.decorators.js";
 import type { AuthenticatedUser } from "../auth/auth.types.js";
@@ -36,7 +41,7 @@ export class SubmissionsController {
     @Req() request: FastifyRequest,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
+    const { stagedObjectKey, fields, fileName } = await readMultipartArchiveRequest(request, [
       "assignmentId",
       "purpose",
     ]);
@@ -45,7 +50,7 @@ export class SubmissionsController {
       assignmentId: fields.assignmentId,
       purpose: fields.purpose as CreateUploadBatchDto["purpose"],
       fileName,
-      archiveBuffer,
+      stagedObjectKey,
       user,
     });
   }
@@ -65,14 +70,14 @@ export class SubmissionsController {
     @Req() request: FastifyRequest,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
+    const { stagedObjectKey, fields, fileName } = await readMultipartArchiveRequest(request, [
       "assignmentKey",
     ]);
 
     return this.submissionsService.createStudentSubmissionFromArchive({
       assignmentKey: fields.assignmentKey,
       fileName,
-      archiveBuffer,
+      stagedObjectKey,
       user,
     });
   }
@@ -86,7 +91,7 @@ export class SubmissionsController {
   @Public()
   @Post("public/student/archive")
   async createPublicStudentSubmissionArchive(@Req() request: FastifyRequest) {
-    const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
+    const { stagedObjectKey, fields, fileName } = await readMultipartArchiveRequest(request, [
       "assignmentKey",
       "encryptedIdentity",
     ]);
@@ -95,21 +100,21 @@ export class SubmissionsController {
       assignmentKey: fields.assignmentKey,
       encryptedIdentity: fields.encryptedIdentity,
       fileName,
-      archiveBuffer,
+      stagedObjectKey,
     });
   }
 
   @Public()
   @Post("public/student/bulk-archive")
   async createPublicBulkStudentSubmissionArchive(@Req() request: FastifyRequest) {
-    const { archiveBuffer, fields, fileName } = await readMultipartArchiveRequest(request, [
+    const { stagedObjectKey, fields, fileName } = await readMultipartArchiveRequest(request, [
       "assignmentKey",
     ]);
 
     return this.submissionsService.createPublicBulkStudentSubmissionArchive({
       assignmentKey: fields.assignmentKey,
       fileName,
-      archiveBuffer,
+      stagedObjectKey,
     });
   }
 
@@ -246,37 +251,50 @@ export class SubmissionsController {
   }
 }
 
-async function readMultipartArchiveRequest(
+export async function readMultipartArchiveRequest(
   request: FastifyRequest,
   requiredFieldNames: string[],
 ) {
   const fields: Record<string, string> = {};
-  let archiveBuffer: Buffer | undefined;
+  let stagedObjectKey: string | undefined;
   let fileName = "upload.zip";
 
-  for await (const part of request.parts()) {
-    if (part.type === "file") {
-      if (archiveBuffer) {
-        throw new BadRequestException("only one archive file is allowed per request");
+  try {
+    for await (const part of request.parts()) {
+      if (part.type === "file") {
+        if (stagedObjectKey) {
+          throw new BadRequestException("only one archive file is allowed per request");
+        }
+
+        fileName = part.filename || fileName;
+        stagedObjectKey = createStagedObjectKey(fileName);
+        await writeObjectStream(stagedObjectKey, part.file);
+
+        if (part.file.truncated) {
+          throw new request.server.multipartErrors.RequestFileTooLargeError();
+        }
+
+        continue;
       }
 
-      archiveBuffer = await part.toBuffer();
-      fileName = part.filename || fileName;
-      continue;
+      fields[part.fieldname] = String(part.value ?? "");
     }
 
-    fields[part.fieldname] = String(part.value ?? "");
-  }
+    if (!stagedObjectKey) {
+      throw new BadRequestException("zip archive file is required");
+    }
 
-  if (!archiveBuffer) {
-    throw new BadRequestException("zip archive file is required");
+    return {
+      stagedObjectKey,
+      fileName,
+      fields: validateRequiredFields(fields, requiredFieldNames),
+    };
+  } catch (error) {
+    if (stagedObjectKey) {
+      await deleteObject(stagedObjectKey).catch(() => undefined);
+    }
+    throw error;
   }
-
-  return {
-    archiveBuffer,
-    fileName,
-    fields: validateRequiredFields(fields, requiredFieldNames),
-  };
 }
 
 function validateRequiredFields(fields: Record<string, string>, requiredFieldNames: string[]) {

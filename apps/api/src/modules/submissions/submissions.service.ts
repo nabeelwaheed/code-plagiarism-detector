@@ -10,6 +10,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   createObjectKey,
   deleteObject,
+  promoteStagedObject,
   readObjectBuffer,
   writeObjectBuffer,
 } from "@similarity/shared";
@@ -78,47 +79,43 @@ export class SubmissionsService {
     assignmentId: string;
     purpose: CreateUploadBatchDto["purpose"];
     fileName: string;
-    archiveBuffer: Buffer;
+    stagedObjectKey: string;
     user: AuthenticatedUser;
   }) {
-    ensureZipFileName(payload.fileName);
-    ensureSupportedUploadPurpose(payload.purpose);
-    ensureProfessorUploadPurpose(payload.purpose);
-    await this.assertProfessorOwnsAssignment(payload.assignmentId, payload.user.id);
+    try {
+      ensureZipFileName(payload.fileName);
+      ensureSupportedUploadPurpose(payload.purpose);
+      ensureProfessorUploadPurpose(payload.purpose);
+      await this.assertProfessorOwnsAssignment(payload.assignmentId, payload.user.id);
 
-    const assignment = await this.prisma.assignment.findUnique({
-      where: { id: payload.assignmentId },
-      select: { language: true },
-    });
+      const assignment = await this.prisma.assignment.findUnique({
+        where: { id: payload.assignmentId },
+        select: { language: true },
+      });
 
-    if (!assignment) {
-      throw new NotFoundException("That assignment no longer exists");
+      if (!assignment) {
+        throw new NotFoundException("That assignment no longer exists");
+      }
+
+      return this.finalizeArchiveUpload({
+        stagedObjectKey: payload.stagedObjectKey,
+        finalObjectPrefix: `raw/${payload.assignmentId}/${payload.purpose}`,
+        finalFileName: payload.fileName,
+        uploadBatchData: {
+          assignmentId: payload.assignmentId,
+          uploaderId: payload.user.id,
+          purpose: payload.purpose.toUpperCase() as UploadPurpose,
+        },
+        queueJob: {
+          assignmentId: payload.assignmentId,
+          assignmentLanguage: assignment.language.toLowerCase(),
+          kind: mapUploadPurposeToPreparationKind(payload.purpose),
+        },
+      });
+    } catch (error) {
+      await deleteObjectKeysBestEffort([payload.stagedObjectKey]);
+      throw error;
     }
-
-    const objectKey = createObjectKey(
-      `raw/${payload.assignmentId}/${payload.purpose}`,
-      payload.fileName,
-    );
-
-    await writeObjectBuffer(objectKey, payload.archiveBuffer);
-
-    const uploadBatch = await this.prisma.uploadBatch.create({
-      data: {
-        assignmentId: payload.assignmentId,
-        uploaderId: payload.user.id,
-        purpose: payload.purpose.toUpperCase() as UploadPurpose,
-        originalObjectKey: objectKey,
-      },
-    });
-
-    await this.queueService.enqueueUploadPreparation({
-      assignmentId: payload.assignmentId,
-      assignmentLanguage: assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-      kind: mapUploadPurposeToPreparationKind(payload.purpose),
-    });
-
-    return uploadBatch;
   }
 
   async createStudentSubmission(payload: CreateStudentSubmissionDto, user: AuthenticatedUser) {
@@ -150,122 +147,116 @@ export class SubmissionsService {
   async createStudentSubmissionFromArchive(payload: {
     assignmentKey: string;
     fileName: string;
-    archiveBuffer: Buffer;
+    stagedObjectKey: string;
     user: AuthenticatedUser;
   }) {
-    ensureZipFileName(payload.fileName);
-    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
+    try {
+      ensureZipFileName(payload.fileName);
+      const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
 
-    const objectKey = createObjectKey(
-      `raw/${assignmentKey.assignment.id}/student_submission`,
-      payload.fileName,
-    );
+      const uploadBatch = await this.finalizeArchiveUpload({
+        stagedObjectKey: payload.stagedObjectKey,
+        finalObjectPrefix: `raw/${assignmentKey.assignment.id}/student_submission`,
+        finalFileName: payload.fileName,
+        uploadBatchData: {
+          assignmentId: assignmentKey.assignment.id,
+          uploaderId: payload.user.id,
+          purpose: UploadPurpose.STUDENT_SUBMISSION,
+        },
+        queueJob: {
+          assignmentId: assignmentKey.assignment.id,
+          assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+          kind: "current",
+        },
+      });
 
-    await writeObjectBuffer(objectKey, payload.archiveBuffer);
-
-    const uploadBatch = await this.prisma.uploadBatch.create({
-      data: {
+      return {
         assignmentId: assignmentKey.assignment.id,
-        uploaderId: payload.user.id,
-        purpose: UploadPurpose.STUDENT_SUBMISSION,
-        originalObjectKey: objectKey,
-      },
-    });
-
-    await this.queueService.enqueueUploadPreparation({
-      assignmentId: assignmentKey.assignment.id,
-      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-      kind: "current",
-    });
-
-    return {
-      assignmentId: assignmentKey.assignment.id,
-      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-    };
+        assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+        uploadBatchId: uploadBatch.id,
+      };
+    } catch (error) {
+      await deleteObjectKeysBestEffort([payload.stagedObjectKey]);
+      throw error;
+    }
   }
 
   async createPublicStudentSubmissionFromArchive(payload: {
     assignmentKey: string;
     encryptedIdentity: string;
     fileName: string;
-    archiveBuffer: Buffer;
+    stagedObjectKey: string;
   }) {
-    ensureZipFileName(payload.fileName);
-    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
-    const encryptedIdentity = validateEncryptedIdentityString(payload.encryptedIdentity);
+    try {
+      ensureZipFileName(payload.fileName);
+      const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
+      const encryptedIdentity = validateEncryptedIdentityString(payload.encryptedIdentity);
 
-    const objectKey = createObjectKey(
-      `raw/${assignmentKey.assignment.id}/student_submission`,
-      "submission.zip",
-    );
+      const uploadBatch = await this.finalizeArchiveUpload({
+        stagedObjectKey: payload.stagedObjectKey,
+        finalObjectPrefix: `raw/${assignmentKey.assignment.id}/student_submission`,
+        finalFileName: "submission.zip",
+        uploadBatchData: {
+          assignmentId: assignmentKey.assignment.id,
+          uploaderId: null,
+          encryptedIdentity,
+          purpose: UploadPurpose.STUDENT_SUBMISSION,
+        },
+        queueJob: {
+          assignmentId: assignmentKey.assignment.id,
+          assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+          kind: "current",
+        },
+      });
 
-    await writeObjectBuffer(objectKey, payload.archiveBuffer);
-
-    const uploadBatch = await this.prisma.uploadBatch.create({
-      data: {
+      return {
         assignmentId: assignmentKey.assignment.id,
-        uploaderId: null,
-        encryptedIdentity,
-        purpose: UploadPurpose.STUDENT_SUBMISSION,
-        originalObjectKey: objectKey,
-      },
-    });
-
-    await this.queueService.enqueueUploadPreparation({
-      assignmentId: assignmentKey.assignment.id,
-      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-      kind: "current",
-    });
-
-    return {
-      assignmentId: assignmentKey.assignment.id,
-      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-      statusToken: this.createPublicStatusToken(uploadBatch.id),
-    };
+        assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+        uploadBatchId: uploadBatch.id,
+        statusToken: this.createPublicStatusToken(uploadBatch.id),
+      };
+    } catch (error) {
+      await deleteObjectKeysBestEffort([payload.stagedObjectKey]);
+      throw error;
+    }
   }
 
   async createPublicBulkStudentSubmissionArchive(payload: {
     assignmentKey: string;
     fileName: string;
-    archiveBuffer: Buffer;
+    stagedObjectKey: string;
   }) {
-    ensureZipFileName(payload.fileName);
-    const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
+    try {
+      ensureZipFileName(payload.fileName);
+      const assignmentKey = await this.findActiveAssignmentKey(payload.assignmentKey);
 
-    const objectKey = createObjectKey(
-      `raw/${assignmentKey.assignment.id}/bulk_student_submission`,
-      "bulk-current-submissions.zip",
-    );
+      const uploadBatch = await this.finalizeArchiveUpload({
+        stagedObjectKey: payload.stagedObjectKey,
+        finalObjectPrefix: `raw/${assignmentKey.assignment.id}/bulk_student_submission`,
+        finalFileName: "bulk-current-submissions.zip",
+        uploadBatchData: {
+          assignmentId: assignmentKey.assignment.id,
+          uploaderId: null,
+          encryptedIdentity: null,
+          purpose: UploadPurpose.STUDENT_SUBMISSION,
+        },
+        queueJob: {
+          assignmentId: assignmentKey.assignment.id,
+          assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+          kind: "bulk_current",
+        },
+      });
 
-    await writeObjectBuffer(objectKey, payload.archiveBuffer);
-
-    const uploadBatch = await this.prisma.uploadBatch.create({
-      data: {
+      return {
         assignmentId: assignmentKey.assignment.id,
-        uploaderId: null,
-        encryptedIdentity: null,
-        purpose: UploadPurpose.STUDENT_SUBMISSION,
-        originalObjectKey: objectKey,
-      },
-    });
-
-    await this.queueService.enqueueUploadPreparation({
-      assignmentId: assignmentKey.assignment.id,
-      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-      kind: "bulk_current",
-    });
-
-    return {
-      assignmentId: assignmentKey.assignment.id,
-      assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
-      uploadBatchId: uploadBatch.id,
-      statusToken: this.createPublicStatusToken(uploadBatch.id),
-    };
+        assignmentLanguage: assignmentKey.assignment.language.toLowerCase(),
+        uploadBatchId: uploadBatch.id,
+        statusToken: this.createPublicStatusToken(uploadBatch.id),
+      };
+    } catch (error) {
+      await deleteObjectKeysBestEffort([payload.stagedObjectKey]);
+      throw error;
+    }
   }
 
   async getUploadBatch(uploadBatchId: string, user: AuthenticatedUser) {
@@ -1006,6 +997,68 @@ export class SubmissionsService {
     }
 
     return timingSafeEqual(providedBuffer, expectedBuffer);
+  }
+
+  private async finalizeArchiveUpload(input: {
+    stagedObjectKey: string;
+    finalObjectPrefix: string;
+    finalFileName: string;
+    uploadBatchData: {
+      assignmentId: string;
+      uploaderId: string | null;
+      encryptedIdentity?: string | null;
+      purpose: UploadPurpose;
+    };
+    queueJob: {
+      assignmentId: string;
+      assignmentLanguage: string;
+      kind: "current" | "historical" | "template" | "bulk_current";
+    };
+  }) {
+    const finalObjectKey = createObjectKey(input.finalObjectPrefix, input.finalFileName);
+    let promotedToFinal = false;
+    let uploadBatch: { id: string } | null = null;
+    let queued = false;
+
+    try {
+      await promoteStagedObject(input.stagedObjectKey, finalObjectKey);
+      promotedToFinal = true;
+
+      uploadBatch = await this.prisma.uploadBatch.create({
+        data: {
+          ...input.uploadBatchData,
+          originalObjectKey: finalObjectKey,
+        },
+      });
+
+      await this.queueService.enqueueUploadPreparation({
+        ...input.queueJob,
+        uploadBatchId: uploadBatch.id,
+      });
+      queued = true;
+
+      return uploadBatch;
+    } catch (error) {
+      if (!promotedToFinal) {
+        await deleteObjectKeysBestEffort([input.stagedObjectKey]);
+      } else if (!uploadBatch) {
+        await deleteObjectKeysBestEffort([finalObjectKey]);
+      } else if (!queued) {
+        const queueFailureMessage = "We couldn't start processing that upload. Please try again.";
+        await Promise.allSettled([
+          deleteObject(finalObjectKey),
+          this.prisma.uploadBatch.update({
+            where: { id: uploadBatch.id },
+            data: {
+              status: "FAILED",
+              errorMessage: queueFailureMessage,
+            },
+          }),
+        ]);
+      }
+
+      throw error;
+    }
   }
 }
 

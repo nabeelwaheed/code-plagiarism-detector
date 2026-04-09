@@ -6,8 +6,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 import {
   byteSpanToEditorRange,
+  createEvidenceHighlightContext,
   editorPositionToByteOffset,
   hexToTransparentFill,
+  rawByteSpanToRenderRanges,
   spanContainsByteOffset,
 } from "./evidence-viewer-utils";
 
@@ -55,6 +57,44 @@ export function EvidenceViewer({
     () => matches.filter((match) => match.kind === "comment"),
     [matches],
   );
+  const leftHighlightContext = useMemo(
+    () => createEvidenceHighlightContext(leftSource, language),
+    [language, leftSource],
+  );
+  const rightHighlightContext = useMemo(
+    () => createEvidenceHighlightContext(rightSource, language),
+    [language, rightSource],
+  );
+  const leftMatchRenderRanges = useMemo(
+    () =>
+      new Map(
+        matches.map((match) => [
+          match.matchId,
+          rawByteSpanToRenderRanges(
+            leftHighlightContext,
+            match.left.byteStart,
+            match.left.byteEnd,
+            match.kind,
+          ),
+        ]),
+      ),
+    [leftHighlightContext, matches],
+  );
+  const rightMatchRenderRanges = useMemo(
+    () =>
+      new Map(
+        matches.map((match) => [
+          match.matchId,
+          rawByteSpanToRenderRanges(
+            rightHighlightContext,
+            match.right.byteStart,
+            match.right.byteEnd,
+            match.kind,
+          ),
+        ]),
+      ),
+    [matches, rightHighlightContext],
+  );
 
   useEffect(() => {
     if (activeMatchId && !matches.some((match) => match.matchId === activeMatchId)) {
@@ -98,10 +138,9 @@ export function EvidenceViewer({
 
     leftDecorationIdsRef.current = leftEditor.deltaDecorations(
       leftDecorationIdsRef.current,
-      matches.map((match) => {
-        const range = byteSpanToEditorRange(leftSource, match.left.byteStart, match.left.byteEnd);
+      matches.flatMap((match) => {
         const isActive = activeMatchId === match.matchId;
-        return {
+        return (leftMatchRenderRanges.get(match.matchId) ?? []).map((range) => ({
           range: new monaco.Range(
             range.startLineNumber,
             range.startColumn,
@@ -116,16 +155,15 @@ export function EvidenceViewer({
               ? `match-inline-active-${match.matchId}`
               : `match-inline-${match.matchId}`,
           },
-        };
+        }));
       }),
     );
 
     rightDecorationIdsRef.current = rightEditor.deltaDecorations(
       rightDecorationIdsRef.current,
-      matches.map((match) => {
-        const range = byteSpanToEditorRange(rightSource, match.right.byteStart, match.right.byteEnd);
+      matches.flatMap((match) => {
         const isActive = activeMatchId === match.matchId;
-        return {
+        return (rightMatchRenderRanges.get(match.matchId) ?? []).map((range) => ({
           range: new monaco.Range(
             range.startLineNumber,
             range.startColumn,
@@ -140,10 +178,10 @@ export function EvidenceViewer({
               ? `match-inline-active-${match.matchId}`
               : `match-inline-${match.matchId}`,
           },
-        };
+        }));
       }),
     );
-  }, [activeMatchId, leftSource, matches, rightSource]);
+  }, [activeMatchId, leftMatchRenderRanges, matches, rightMatchRenderRanges]);
 
   useEffect(() => {
     const leftEditor = leftEditorRef.current;

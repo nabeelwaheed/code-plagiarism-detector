@@ -57,7 +57,7 @@ function loadApiRuntimeConfig(): ApiRuntimeConfig {
     redisUrl,
     databaseUrl,
     corsAllowedOrigins,
-    uploadMaxFileSizeBytes: getIntegerEnv("UPLOAD_MAX_FILE_SIZE_MB", 50) * 1024 * 1024,
+    uploadMaxFileSizeBytes: getIntegerEnv("UPLOAD_MAX_FILE_SIZE_MB", 250) * 1024 * 1024,
     session: {
       cookieName: getEnvValue("AUTH_SESSION_COOKIE_NAME", "similarity_session"),
       secure: getBooleanEnv("AUTH_COOKIE_SECURE", isProduction),
