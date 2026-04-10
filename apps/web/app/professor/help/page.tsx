@@ -55,11 +55,11 @@ const professorSections = [
         title: "Accepted structures",
         body: "Normal single uploads and bulk-style uploads follow different archive rules.",
         bullets: [
-          "Single submission or template: zip -> files",
-          "Single submission or template: zip -> folders -> files",
-          "Single submission or template: zip -> wrapper folder -> files",
-          "Bulk or historical: parent zip -> child submission zips",
-          "Bulk or historical: parent zip -> one wrapper folder -> child submission zips",
+          "Single submission should be a zip folder.",
+          "Template or reference uploads should also be wrapped in a zip file and are treated like a single submission.",
+          "Accepted Structure for Bulk and Historical:",
+          "option 1: parent zip -> child submission zips",
+          "option 2: parent zip -> one wrapper folder -> child submission zips",
           "Only first-layer child zips define submissions in bulk or historical uploads.",
         ],
       },
@@ -109,10 +109,6 @@ const professorSections = [
       {
         title: "Template behavior",
         body: "Template or reference uploads are treated as reference material for masking and exclusion, not as suspicious submissions.",
-      },
-      {
-        title: "Bulk and historical boundaries",
-        body: "For bulk current and historical uploads, only first-layer child zip files define submission boundaries. Normal folders do not define submissions.",
       },
       {
         title: "Submission identity",

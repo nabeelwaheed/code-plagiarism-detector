@@ -25,22 +25,17 @@ const studentSections = [
       },
       {
         title: "What to upload",
-        body: "Upload one zip file. Inside the zip, your source files can be placed in a few common layouts.",
-        bullets: [
-          "Directly in the zip",
-          "Inside folders",
-          "Inside one wrapper folder",
-          "Inside deeper folders",
-          "Only supported source files are used for analysis.",
-        ],
+        body: "Upload one zip file. Only supported source files are used for analysis.",
       },
       {
-        title: "Accepted file structures",
-        body: "These are common file layouts that work for a normal single student submission.",
+        title: "Accepted structures",
+        body: "Normal single uploads and bulk-style uploads follow different archive rules.",
         bullets: [
-          "zip -> files",
-          "zip -> folders -> files",
-          "zip -> wrapper folder -> files",
+          "Single submission should be a zip folder.",
+          "Accepted Structure for Bulk and Historical:",
+          "option 1: parent zip -> child submission zips",
+          "option 2: parent zip -> one wrapper folder -> child submission zips",
+          "Only first-layer child zips define submissions in bulk or historical uploads.",
         ],
       },
       {
@@ -81,10 +76,6 @@ const studentSections = [
       {
         title: "Repeated submissions",
         body: "If the same student submits again, it appears as a separate submission entry.",
-      },
-      {
-        title: "File extraction",
-        body: "For normal single-submission uploads, nested folders are supported, and nested zip files inside the uploaded zip are extracted into the same submission.",
       },
       {
         title: "Preparation vs comparison",
