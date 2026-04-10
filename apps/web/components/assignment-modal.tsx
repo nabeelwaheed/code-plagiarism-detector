@@ -15,6 +15,7 @@ interface AssignmentModalProps {
   isEditing?: boolean;
   isPending?: boolean;
   error?: string | null;
+  dueDateFeedback?: string | null;
   onChange: (state: AssignmentFormState) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
@@ -26,6 +27,7 @@ export function AssignmentModal({
   isEditing = false,
   isPending = false,
   error,
+  dueDateFeedback,
   onChange,
   onSubmit,
   onClose,
@@ -88,6 +90,11 @@ export function AssignmentModal({
               <span style={{ fontSize: "0.78rem", color: "var(--text-tertiary)" }}>
                 Shown in your local time. Deadlines are informational only.
               </span>
+              {dueDateFeedback && (
+                <span style={{ fontSize: "0.78rem", color: "var(--accent-red)" }}>
+                  {dueDateFeedback}
+                </span>
+              )}
             </div>
 
             {error && (
@@ -104,7 +111,7 @@ export function AssignmentModal({
             <button
               className="btn btn-primary"
               type="submit"
-              disabled={isPending || !formState.title.trim()}
+              disabled={isPending || !formState.title.trim() || Boolean(dueDateFeedback)}
             >
               {isPending
                 ? isEditing ? "Saving..." : "Creating..."

@@ -74,6 +74,15 @@ type SubmissionDeleteLookupState =
 
 const CODE_SUSPICIOUS_THRESHOLD = 0.35;
 
+function getPastDueDateFeedback(dueDate: string) {
+  if (!dueDate.trim()) return null;
+
+  const parsed = new Date(dueDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed.getTime() < Date.now() ? "Please choose a future date and time." : null;
+}
+
 export function AssignmentWorkspace({
   assignmentId,
   initialTab = "submissions",
@@ -363,6 +372,7 @@ export function AssignmentWorkspace({
     assignment.uploadBatches.some((b) => b.status === "received" || b.status === "processing") ||
     assignment.comparisonRuns.some((r) => r.status === "queued" || r.status === "running");
   const canRunComparison = assignment.canRunComparison && !rerunMutation.isPending;
+  const dueDateFeedback = getPastDueDateFeedback(dueDateInput);
   const isDangerPending =
     deleteAssignmentMutation.isPending ||
     deleteSubmissionMutation.isPending ||
@@ -1107,6 +1117,7 @@ export function AssignmentWorkspace({
                     <form
                       onSubmit={(e: FormEvent<HTMLFormElement>) => {
                         e.preventDefault();
+                        if (dueDateFeedback) return;
                         const next = dueDateInput.trim() ? new Date(dueDateInput) : null;
                         updateDueDateMutation.mutate(next ? next.toISOString() : null);
                       }}
@@ -1118,8 +1129,17 @@ export function AssignmentWorkspace({
                         value={dueDateInput}
                         onChange={(e) => setDueDateInput(e.target.value)}
                       />
+                      {dueDateFeedback && (
+                        <span style={{ fontSize: "0.78rem", color: "var(--accent-red)" }}>
+                          {dueDateFeedback}
+                        </span>
+                      )}
                       <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <button className="btn btn-primary btn-sm" disabled={updateDueDateMutation.isPending} type="submit">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={updateDueDateMutation.isPending || Boolean(dueDateFeedback)}
+                          type="submit"
+                        >
                           Save
                         </button>
                         <button

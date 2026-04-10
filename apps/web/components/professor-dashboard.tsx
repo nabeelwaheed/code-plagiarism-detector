@@ -27,6 +27,15 @@ type AssignmentFormState = {
 
 const DEFAULT_FORM: AssignmentFormState = { title: "", language: "java", dueDate: "" };
 
+function getPastDueDateFeedback(dueDate: string) {
+  if (!dueDate.trim()) return null;
+
+  const parsed = new Date(dueDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  return parsed.getTime() < Date.now() ? "Please choose a future date and time." : null;
+}
+
 function getAvatarColor(email: string) {
   const colors = ["#1d4ed8", "#059669", "#d97706", "#7c3aed", "#0891b2", "#be185d"];
   let hash = 0;
@@ -267,6 +276,7 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
     e.preventDefault();
     setFormError(null);
     if (!formState.title.trim()) return;
+    if (getPastDueDateFeedback(formState.dueDate)) return;
 
     if (editingAssignment) {
       updateDueDateMutation.mutate({
@@ -279,6 +289,7 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
   };
 
   const assignments = assignmentsQuery.data ?? [];
+  const dueDateFeedback = getPastDueDateFeedback(formState.dueDate);
 
   const filteredAssignments = useMemo(() => {
     if (!searchQuery.trim()) return assignments;
@@ -325,7 +336,13 @@ export function ProfessorDashboard({ successMessage }: { successMessage?: string
         isEditing={Boolean(editingAssignment)}
         isPending={isPending}
         error={formError}
-        onChange={setFormState}
+        dueDateFeedback={dueDateFeedback}
+        onChange={(nextState) => {
+          setFormState(nextState);
+          if (formError) {
+            setFormError(null);
+          }
+        }}
         onSubmit={handleSubmit}
         onClose={() => { setIsModalOpen(false); setFormError(null); }}
       />
