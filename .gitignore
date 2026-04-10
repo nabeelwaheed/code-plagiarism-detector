@@ -45,3 +45,4 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+docker-compose.local.yml
