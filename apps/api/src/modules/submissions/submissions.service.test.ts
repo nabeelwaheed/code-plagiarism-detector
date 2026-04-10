@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { BadRequestException } from "@nestjs/common";
+import { SubmissionKind } from "@prisma/client";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -322,6 +323,219 @@ test("createStudentSubmissionFromArchive still supports the normal single-studen
       uploadBatchId: "batch-3",
       kind: "current",
     });
+  } finally {
+    if (originalRoot === undefined) {
+      delete process.env.OBJECT_STORAGE_ROOT;
+    } else {
+      process.env.OBJECT_STORAGE_ROOT = originalRoot;
+    }
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("deleteSubmission deletes a current submission individually and bumps assignment comparison state", async () => {
+  const originalRoot = process.env.OBJECT_STORAGE_ROOT;
+  const tempRoot = await mkdtemp(join(tmpdir(), "similarity-api-service-"));
+  process.env.OBJECT_STORAGE_ROOT = tempRoot;
+
+  const fileObjectKey = "prepared/assignment-1/current/main.c";
+  const batchObjectKey = "raw/assignment-1/student_submission/current-upload.zip";
+  await writeObjectBuffer(fileObjectKey, Buffer.from("int main() { return 0; }"));
+  await writeObjectBuffer(batchObjectKey, Buffer.from("zip bytes"));
+
+  const events: string[] = [];
+
+  const tx = {
+    pairMatch: {
+      deleteMany: async () => {
+        events.push("pairMatch.deleteMany");
+      },
+    },
+    pairResult: {
+      deleteMany: async () => {
+        events.push("pairResult.deleteMany");
+      },
+    },
+    comparisonRun: {
+      deleteMany: async () => {
+        events.push("comparisonRun.deleteMany");
+      },
+    },
+    submissionFile: {
+      deleteMany: async (args: { where: { submissionId: string } }) => {
+        events.push(`submissionFile.deleteMany:${args.where.submissionId}`);
+      },
+    },
+    submission: {
+      delete: async (args: { where: { id: string } }) => {
+        events.push(`submission.delete:${args.where.id}`);
+      },
+    },
+    uploadBatch: {
+      findUnique: async () => ({
+        id: "batch-1",
+        originalObjectKey: batchObjectKey,
+        _count: {
+          submissions: 0,
+          templateVersions: 0,
+        },
+      }),
+      delete: async (args: { where: { id: string } }) => {
+        events.push(`uploadBatch.delete:${args.where.id}`);
+      },
+    },
+    assignment: {
+      update: async (args: {
+        where: { id: string };
+        data: { comparisonInputVersion: { increment: number } };
+      }) => {
+        events.push(
+          `assignment.update:${args.where.id}:${args.data.comparisonInputVersion.increment}`,
+        );
+      },
+    },
+  };
+
+  const prisma = {
+    assignment: {
+      findUnique: async () => ({ professorId: "prof-1" }),
+    },
+    uploadBatch: {
+      count: async () => 0,
+    },
+    comparisonRun: {
+      count: async () => 0,
+    },
+    submission: {
+      findFirst: async () => ({
+        id: "submission-current",
+        assignmentId: "assignment-1",
+        kind: SubmissionKind.CURRENT,
+        files: [{ storageObjectKey: fileObjectKey }],
+        uploadBatch: {
+          id: "batch-1",
+          originalObjectKey: batchObjectKey,
+        },
+      }),
+    },
+    $transaction: async (callback: (client: typeof tx) => Promise<void>) => callback(tx),
+  };
+
+  try {
+    const service = new SubmissionsService(prisma as never, {} as never);
+
+    const result = await service.deleteSubmission("assignment-1", "submission-current", {
+      id: "prof-1",
+      email: "prof@example.com",
+      role: "professor",
+    });
+
+    assert.deepEqual(result, { ok: true, deletedCount: 1, category: "current" });
+    assert.deepEqual(events, [
+      "pairMatch.deleteMany",
+      "pairResult.deleteMany",
+      "comparisonRun.deleteMany",
+      "submissionFile.deleteMany:submission-current",
+      "submission.delete:submission-current",
+      "uploadBatch.delete:batch-1",
+      "assignment.update:assignment-1:1",
+    ]);
+    await assert.rejects(() => readObjectBuffer(fileObjectKey));
+    await assert.rejects(() => readObjectBuffer(batchObjectKey));
+  } finally {
+    if (originalRoot === undefined) {
+      delete process.env.OBJECT_STORAGE_ROOT;
+    } else {
+      process.env.OBJECT_STORAGE_ROOT = originalRoot;
+    }
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("deleteSubmission still deletes a historical submission and keeps a non-empty upload batch", async () => {
+  const originalRoot = process.env.OBJECT_STORAGE_ROOT;
+  const tempRoot = await mkdtemp(join(tmpdir(), "similarity-api-service-"));
+  process.env.OBJECT_STORAGE_ROOT = tempRoot;
+
+  const fileObjectKey = "prepared/assignment-2/historical/util.c";
+  const batchObjectKey = "raw/assignment-2/historical_submission/history.zip";
+  await writeObjectBuffer(fileObjectKey, Buffer.from("int util() { return 1; }"));
+  await writeObjectBuffer(batchObjectKey, Buffer.from("zip bytes"));
+
+  let uploadBatchDeleteCalled = false;
+
+  const tx = {
+    pairMatch: {
+      deleteMany: async () => undefined,
+    },
+    pairResult: {
+      deleteMany: async () => undefined,
+    },
+    comparisonRun: {
+      deleteMany: async () => undefined,
+    },
+    submissionFile: {
+      deleteMany: async () => undefined,
+    },
+    submission: {
+      delete: async () => undefined,
+    },
+    uploadBatch: {
+      findUnique: async () => ({
+        id: "batch-2",
+        originalObjectKey: batchObjectKey,
+        _count: {
+          submissions: 1,
+          templateVersions: 0,
+        },
+      }),
+      delete: async () => {
+        uploadBatchDeleteCalled = true;
+      },
+    },
+    assignment: {
+      update: async () => undefined,
+    },
+  };
+
+  const prisma = {
+    assignment: {
+      findUnique: async () => ({ professorId: "prof-2" }),
+    },
+    uploadBatch: {
+      count: async () => 0,
+    },
+    comparisonRun: {
+      count: async () => 0,
+    },
+    submission: {
+      findFirst: async () => ({
+        id: "submission-historical",
+        assignmentId: "assignment-2",
+        kind: SubmissionKind.HISTORICAL,
+        files: [{ storageObjectKey: fileObjectKey }],
+        uploadBatch: {
+          id: "batch-2",
+          originalObjectKey: batchObjectKey,
+        },
+      }),
+    },
+    $transaction: async (callback: (client: typeof tx) => Promise<void>) => callback(tx),
+  };
+
+  try {
+    const service = new SubmissionsService(prisma as never, {} as never);
+
+    const result = await service.deleteSubmission("assignment-2", "submission-historical", {
+      id: "prof-2",
+      email: "prof@example.com",
+      role: "professor",
+    });
+
+    assert.deepEqual(result, { ok: true, deletedCount: 1, category: "historical" });
+    assert.equal(uploadBatchDeleteCalled, false);
+    await assert.rejects(() => readObjectBuffer(fileObjectKey));
+    assert.equal((await readObjectBuffer(batchObjectKey)).toString("utf8"), "zip bytes");
   } finally {
     if (originalRoot === undefined) {
       delete process.env.OBJECT_STORAGE_ROOT;

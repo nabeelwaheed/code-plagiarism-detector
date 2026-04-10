@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, BookOpen, LogOut } from "lucide-react";
+import { ArrowLeft, BookOpen, CircleHelp, LogOut } from "lucide-react";
 import { useCurrentUserQuery, useLogoutMutation } from "./auth-hooks";
 
 export function GlobalShell({ children }: { children: React.ReactNode }) {
@@ -18,6 +18,7 @@ export function GlobalShell({ children }: { children: React.ReactNode }) {
 
   const isProfessorRoute = pathname.startsWith("/professor");
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
+  const isPublicSubmissionRoute = pathname === "/";
 
   const handleLogout = () => {
     logoutMutation.mutate(undefined, {
@@ -47,9 +48,15 @@ export function GlobalShell({ children }: { children: React.ReactNode }) {
         <nav className="global-header-nav" aria-label="Primary">
           {isProfessorRoute ? (
             <>
+              {pathname !== "/professor/help" ? (
+                <Link href="/professor/help" className="global-header-link">
+                  <CircleHelp size={13} />
+                  Instructor Guide
+                </Link>
+              ) : null}
               <Link href="/" className="global-header-link">
                 <ArrowLeft size={13} />
-                Student Portal
+                Student Portal Access
               </Link>
               {session?.role === "professor" ? (
                 <button
@@ -66,15 +73,23 @@ export function GlobalShell({ children }: { children: React.ReactNode }) {
           ) : isAuthRoute ? (
             <Link href="/" className="global-header-link">
               <ArrowLeft size={13} />
-              Student Portal
+              Student Portal Access
             </Link>
           ) : (
-            <Link
-              href={session?.role === "professor" ? "/professor" : "/login"}
-              className="global-header-link global-header-link-primary"
-            >
-              Instructor Access
-            </Link>
+            <>
+              {isPublicSubmissionRoute ? (
+                <Link href="/help/student" className="global-header-link">
+                  <CircleHelp size={13} />
+                  Submission Guide
+                </Link>
+              ) : null}
+              <Link
+                href={session?.role === "professor" ? "/professor" : "/login"}
+                className="global-header-link global-header-link-primary"
+              >
+                Instructor Access
+              </Link>
+            </>
           )}
         </nav>
       </header>

@@ -238,11 +238,17 @@ export interface SubmissionIdentityRevealResponse {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const requestBody = init?.body;
+  const hasNonFormDataBody =
+    requestBody !== undefined
+    && requestBody !== null
+    && !(requestBody instanceof FormData);
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
     ...init,
     headers: {
-      ...(init?.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      ...(hasNonFormDataBody ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers ?? {}),
     },
   });

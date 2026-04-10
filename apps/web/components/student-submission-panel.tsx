@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, FileArchive, Lock, Mail, Upload, User } from "lucide-react";
 import {
   getPublicUploadBatch,
@@ -25,6 +25,13 @@ function FileDropInput({
   onChange: (f: File | null) => void;
 }) {
   const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!file && inputRef.current) {
+      inputRef.current.value = "";
+    }
+  }, [file]);
 
   return (
     <label
@@ -39,8 +46,12 @@ function FileDropInput({
       }}
     >
       <input
+        ref={inputRef}
         type="file"
         accept={accept}
+        onClick={(e) => {
+          e.currentTarget.value = "";
+        }}
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
       />
       <FileArchive size={28} style={{ margin: "0 auto 0.6rem", opacity: 0.5 }} />

@@ -9,12 +9,14 @@ import {
   ArrowLeft,
   ChevronDown,
   ChevronUp,
+  CircleHelp,
   Clock,
   Database,
   Download,
   Eye,
   FileArchive,
   FileCode,
+  Home,
   Key,
   Loader2,
   PanelLeftClose,
@@ -40,6 +42,7 @@ import {
   getUploadBatch,
   updateAssignmentDueDate,
   uploadProfessorArchive,
+  type AssignmentDetail,
   type SubmissionIdentityRevealResponse,
 } from "../lib/api";
 import { useCurrentUserQuery } from "./auth-hooks";
@@ -53,6 +56,21 @@ type SelectedArtifact =
   | { type: "submission"; id: string }
   | { type: "template"; id: string }
   | null;
+
+type AssignmentSubmissionListItem = AssignmentDetail["submissions"][number];
+
+type SubmissionDeleteTarget = {
+  id: string;
+  displayName: string;
+  kind: AssignmentSubmissionListItem["kind"];
+  createdAt: string;
+  fileCount: number;
+};
+
+type SubmissionDeleteLookupState =
+  | { status: "idle"; message: string }
+  | { status: "error"; message: string }
+  | { status: "valid"; message: string; match: SubmissionDeleteTarget };
 
 const CODE_SUSPICIOUS_THRESHOLD = 0.35;
 
@@ -81,9 +99,14 @@ export function AssignmentWorkspace({
 
   // Delete confirm modals
   const [confirmDeleteAssignment, setConfirmDeleteAssignment] = useState(false);
-  const [confirmDeleteSubmission, setConfirmDeleteSubmission] = useState<{ id: string; name: string } | null>(null);
+  const [confirmDeleteSubmission, setConfirmDeleteSubmission] = useState<SubmissionDeleteTarget | null>(null);
   const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState<{ id: string; version: number } | null>(null);
   const [confirmDeleteCategory, setConfirmDeleteCategory] = useState<{ cat: "current" | "historical" | "template"; count: number } | null>(null);
+  const [deleteSubmissionInput, setDeleteSubmissionInput] = useState("");
+  const [deleteSubmissionLookup, setDeleteSubmissionLookup] = useState<SubmissionDeleteLookupState>({
+    status: "idle",
+    message: "Enter the exact submission name or unique submission ID, then validate it here before deleting.",
+  });
 
   const currentUserQuery = useCurrentUserQuery();
   const session = currentUserQuery.data ?? null;
@@ -180,6 +203,12 @@ export function AssignmentWorkspace({
     onSuccess: async () => {
       setSelectedArtifact(null);
       setRevealedIdentity(null);
+      setDeleteSubmissionInput("");
+      setDeleteSubmissionLookup({
+        status: "idle",
+        message:
+          "Enter the exact submission name or unique submission ID, then validate it here before deleting.",
+      });
       revealIdentityMutation.reset();
       showToast("Submission deleted. Comparison data cleared.", "info");
       await Promise.all([
@@ -241,6 +270,12 @@ export function AssignmentWorkspace({
     onError: (err: Error) => showToast(err.message, "error"),
   });
 
+  const handleValidateDeleteSubmission = () => {
+    setDeleteSubmissionLookup(
+      resolveSubmissionDeleteLookup(assignmentQuery.data?.submissions ?? [], deleteSubmissionInput),
+    );
+  };
+
   const latestVisibleRun = useMemo(
     () =>
       assignmentQuery.data?.comparisonRuns.find(
@@ -259,6 +294,26 @@ export function AssignmentWorkspace({
   useEffect(() => {
     setDueDateInput(toDateTimeLocalInputValue(assignmentQuery.data?.dueDate ?? null));
   }, [assignmentQuery.data?.dueDate]);
+
+  useEffect(() => {
+    setDeleteSubmissionLookup((currentState) => {
+      if (currentState.status !== "valid") {
+        return currentState;
+      }
+
+      const stillExists = (assignmentQuery.data?.submissions ?? []).some(
+        (submission) => submission.id === currentState.match.id,
+      );
+
+      return stillExists
+        ? currentState
+        : {
+            status: "idle",
+            message:
+              "Enter the exact submission name or unique submission ID, then validate it here before deleting.",
+          };
+    });
+  }, [assignmentQuery.data?.submissions]);
 
   if (!session) {
     return <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-secondary)" }}>Sign in as a professor to open this assignment workspace.</div>;
@@ -336,9 +391,14 @@ export function AssignmentWorkspace({
       <ConfirmModal
         open={Boolean(confirmDeleteSubmission)}
         title="Delete Submission"
-        message={`Delete "${confirmDeleteSubmission?.name}"? This will also clear comparison results for this assignment.`}
+        message="This permanently deletes the matched submission and clears comparison results for this assignment."
         confirmLabel="Delete"
         danger
+        details={
+          confirmDeleteSubmission ? (
+            <SubmissionDeletePreview submission={confirmDeleteSubmission} />
+          ) : undefined
+        }
         onConfirm={() => {
           if (confirmDeleteSubmission) {
             deleteSubmissionMutation.mutate(confirmDeleteSubmission.id);
@@ -388,13 +448,43 @@ export function AssignmentWorkspace({
             flexShrink: 0,
           }}
         >
-          <button
-            onClick={() => router.push("/professor")}
-            className="btn btn-ghost btn-sm"
-            style={{ marginBottom: "0.6rem", padding: "0.25rem 0.5rem", color: "var(--text-secondary)" }}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "0.6rem",
+              flexWrap: "wrap",
+              marginBottom: "0.6rem",
+            }}
           >
-            <ArrowLeft size={15} /> Back to Dashboard
-          </button>
+            <button
+              onClick={() => router.push("/professor")}
+              className="btn btn-ghost btn-sm"
+              style={{ padding: "0.25rem 0.5rem", color: "var(--text-secondary)" }}
+            >
+              <ArrowLeft size={15} /> Back to Dashboard
+            </button>
+
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <Link
+                href={`/professor/help?returnTo=${encodeURIComponent(`/professor/assignments/${assignmentId}`)}`}
+                className="btn btn-outline btn-sm"
+                style={{ textDecoration: "none" }}
+              >
+                <CircleHelp size={14} />
+                Instructor Guide
+              </Link>
+              <Link
+                href="/"
+                className="btn btn-outline btn-sm"
+                style={{ textDecoration: "none" }}
+              >
+                <Home size={14} />
+                Student Portal Access
+              </Link>
+            </div>
+          </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
             <div>
@@ -582,7 +672,6 @@ export function AssignmentWorkspace({
                       selectedKey={selectedArtifactKey}
                       onSelect={(id) => setSelectedArtifact({ type: "submission", id })}
                       onDownload={(id) => downloadMutation.mutate({ type: "submission", id })}
-                      showDelete={false}
                     />
                   )}
                 </SectionBox>
@@ -599,9 +688,6 @@ export function AssignmentWorkspace({
                       selectedKey={selectedArtifactKey}
                       onSelect={(id) => setSelectedArtifact({ type: "submission", id })}
                       onDownload={(id) => downloadMutation.mutate({ type: "submission", id })}
-                      showDelete
-                      isDangerPending={isDangerPending || hasActiveJobs}
-                      onDelete={(id, name) => setConfirmDeleteSubmission({ id, name })}
                     />
                   )}
                 </SectionBox>
@@ -1124,6 +1210,101 @@ export function AssignmentWorkspace({
                   </div>
                 )}
 
+                <div className="glass-card" style={{ padding: "1.25rem" }}>
+                  <h3 style={{ fontSize: "0.95rem", marginBottom: "0.4rem" }}>Delete a Submission</h3>
+                  <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", marginBottom: "0.85rem" }}>
+                    Enter the exact submission name (ID). This flow will not show a
+                    browseable submission list, and deletion is only enabled after a valid match is found.
+                  </p>
+
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleValidateDeleteSubmission();
+                    }}
+                    style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
+                  >
+                    <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                      <input
+                        className="form-input"
+                        value={deleteSubmissionInput}
+                        onChange={(event) => {
+                          setDeleteSubmissionInput(event.target.value);
+                          setDeleteSubmissionLookup({
+                            status: "idle",
+                            message:
+                              "Enter the exact submission name or unique submission ID, then validate it here before deleting.",
+                          });
+                        }}
+                        placeholder="Enter submission name"
+                        disabled={isDangerPending || hasActiveJobs}
+                        style={{ flex: "1 1 20rem", minWidth: 220 }}
+                      />
+                      <button
+                        className="btn btn-outline btn-sm"
+                        type="submit"
+                        disabled={isDangerPending || hasActiveJobs}
+                      >
+                        Validate Match
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        borderRadius: "var(--radius-md)",
+                        border:
+                          deleteSubmissionLookup.status === "error"
+                            ? "1px solid rgba(220,38,38,0.24)"
+                            : deleteSubmissionLookup.status === "valid"
+                              ? "1px solid rgba(34,197,94,0.24)"
+                              : "1px solid var(--border-subtle)",
+                        background:
+                          deleteSubmissionLookup.status === "error"
+                            ? "var(--accent-red-soft)"
+                            : deleteSubmissionLookup.status === "valid"
+                              ? "rgba(34,197,94,0.08)"
+                              : "var(--bg-surface-raised)",
+                        color:
+                          deleteSubmissionLookup.status === "error"
+                            ? "#991b1b"
+                            : deleteSubmissionLookup.status === "valid"
+                              ? "#166534"
+                              : "var(--text-secondary)",
+                        fontSize: "0.82rem",
+                        padding: "0.7rem 0.8rem",
+                      }}
+                    >
+                      {deleteSubmissionLookup.message}
+                    </div>
+
+                    {deleteSubmissionLookup.status === "valid" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.8rem",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <SubmissionDeletePreview submission={deleteSubmissionLookup.match} />
+                        <button
+                          className="btn btn-danger btn-sm"
+                          type="button"
+                          disabled={isDangerPending || hasActiveJobs}
+                          onClick={() => setConfirmDeleteSubmission(deleteSubmissionLookup.match)}
+                        >
+                          {deleteSubmissionMutation.isPending ? (
+                            <Loader2 size={13} className="anim-spin" />
+                          ) : (
+                            <Trash2 size={13} />
+                          )}
+                          {deleteSubmissionMutation.isPending ? "Deleting..." : "Delete Matched Submission"}
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                </div>
+
                 {/* Category deletes */}
                 <div className="glass-card" style={{ padding: "1.25rem" }}>
                   <h3 style={{ fontSize: "0.95rem", marginBottom: "0.75rem" }}>Delete Category</h3>
@@ -1231,22 +1412,55 @@ function SectionBox({
   );
 }
 
+function SubmissionDeletePreview({ submission }: { submission: SubmissionDeleteTarget }) {
+  return (
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 420,
+        border: "1px solid rgba(220,38,38,0.2)",
+        borderRadius: "var(--radius-md)",
+        background: "var(--bg-surface-raised)",
+        padding: "0.85rem 0.95rem",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>{submission.displayName}</div>
+          <div style={{ fontSize: "0.76rem", color: "var(--text-tertiary)", marginTop: "0.2rem" }}>
+            {capitalizeLabel(submission.kind)} submission
+          </div>
+        </div>
+        <span
+          className="status-badge"
+          style={{
+            background:
+              submission.kind === "current" ? "rgba(59,130,246,0.12)" : "rgba(245,158,11,0.14)",
+            color: submission.kind === "current" ? "#1d4ed8" : "#b45309",
+          }}
+        >
+          {submission.kind}
+        </span>
+      </div>
+      <div style={{ marginTop: "0.7rem", display: "grid", gap: "0.35rem", fontSize: "0.78rem" }}>
+        <div><strong>ID:</strong> <span className="mono">{submission.id}</span></div>
+        <div><strong>Files:</strong> {submission.fileCount}</div>
+        <div><strong>Uploaded:</strong> {formatDateTime(submission.createdAt)}</div>
+      </div>
+    </div>
+  );
+}
+
 function SubmissionTable({
   submissions,
   selectedKey,
   onSelect,
   onDownload,
-  showDelete = false,
-  isDangerPending = false,
-  onDelete,
 }: {
   submissions: Array<{ id: string; displayName: string; fileCount: number; createdAt: string; kind: string }>;
   selectedKey: string | null;
   onSelect: (id: string) => void;
   onDownload: (id: string) => void;
-  showDelete?: boolean;
-  isDangerPending?: boolean;
-  onDelete?: (id: string, name: string) => void;
 }) {
   return (
     <div style={{ overflowX: "auto" }}>
@@ -1276,17 +1490,6 @@ function SubmissionTable({
                   <button className="btn btn-outline btn-sm" onClick={() => onDownload(s.id)} title="Download">
                     <Download size={13} />
                   </button>
-                  {showDelete && onDelete && (
-                    <button
-                      className="btn btn-outline btn-sm"
-                      disabled={isDangerPending}
-                      onClick={() => onDelete(s.id, s.displayName)}
-                      style={{ color: "var(--accent-red)", borderColor: "var(--accent-red)" }}
-                      title="Delete"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
                 </div>
               </td>
             </tr>
@@ -1295,6 +1498,60 @@ function SubmissionTable({
       </table>
     </div>
   );
+}
+
+function resolveSubmissionDeleteLookup(
+  submissions: AssignmentSubmissionListItem[],
+  rawInput: string,
+): SubmissionDeleteLookupState {
+  const query = rawInput.trim();
+
+  if (!query) {
+    return {
+      status: "error",
+      message: "Enter a valid submission ID or exact submission name.",
+    };
+  }
+
+  const idMatch = submissions.find((submission) => submission.id === query);
+  if (idMatch) {
+    return {
+      status: "valid",
+      message: "Matched one submission by unique ID. Review it carefully before deleting.",
+      match: toSubmissionDeleteTarget(idMatch),
+    };
+  }
+
+  const nameMatches = submissions.filter((submission) => submission.displayName === query);
+  if (nameMatches.length === 0) {
+    return {
+      status: "error",
+      message: "No such submission.",
+    };
+  }
+
+  if (nameMatches.length > 1) {
+    return {
+      status: "error",
+      message: "That name matches multiple submissions. Enter the unique submission ID instead.",
+    };
+  }
+
+  return {
+    status: "valid",
+    message: "Matched one submission by exact name. Review it carefully before deleting.",
+    match: toSubmissionDeleteTarget(nameMatches[0]!),
+  };
+}
+
+function toSubmissionDeleteTarget(submission: AssignmentSubmissionListItem): SubmissionDeleteTarget {
+  return {
+    id: submission.id,
+    displayName: submission.displayName,
+    kind: submission.kind,
+    createdAt: submission.createdAt,
+    fileCount: submission.fileCount,
+  };
 }
 
 function PairSection({

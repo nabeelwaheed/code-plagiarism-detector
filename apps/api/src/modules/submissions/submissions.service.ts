@@ -675,13 +675,8 @@ export class SubmissionsService {
       throw new NotFoundException("That submission no longer exists");
     }
 
-    if (submission.kind !== SubmissionKind.HISTORICAL) {
-      throw new BadRequestException(
-        "Only historical submissions can be deleted individually right now.",
-      );
-    }
-
     const objectKeys = new Set<string>(submission.files.map((file) => file.storageObjectKey));
+    const category = submission.kind === SubmissionKind.CURRENT ? "current" : "historical";
 
     await this.prisma.$transaction(async (tx) => {
       await clearAssignmentComparisonData(tx, assignmentId);
@@ -704,7 +699,7 @@ export class SubmissionsService {
 
     await deleteObjectKeysBestEffort(objectKeys);
 
-    return { ok: true, deletedCount: 1, category: "historical" };
+    return { ok: true, deletedCount: 1, category };
   }
 
   async deleteTemplate(

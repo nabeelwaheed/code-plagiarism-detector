@@ -8,6 +8,7 @@ interface ConfirmModalProps {
   message: string;
   confirmLabel?: string;
   danger?: boolean;
+  details?: React.ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -18,6 +19,7 @@ export function ConfirmModal({
   message,
   confirmLabel = "Confirm",
   danger = false,
+  details,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -37,6 +39,7 @@ export function ConfirmModal({
         </div>
         <div className="modal-body" style={{ paddingTop: "0.75rem", paddingBottom: "0.75rem" }}>
           <p style={{ fontSize: "0.9rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>{message}</p>
+          {details ? <div style={{ marginTop: "0.9rem" }}>{details}</div> : null}
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={onCancel}>

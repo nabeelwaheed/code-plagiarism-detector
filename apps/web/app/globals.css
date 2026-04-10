@@ -1267,6 +1267,39 @@ tr:hover td {
   flex-wrap: wrap;
 }
 
+.legend-nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-nav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.legend-nav-button:hover:enabled {
+  border-color: var(--brand);
+  box-shadow: var(--shadow-md);
+}
+
+.legend-nav-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .legend-grid {
   display: flex;
   gap: 0.5rem;

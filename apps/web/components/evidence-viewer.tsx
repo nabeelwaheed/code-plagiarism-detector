@@ -2,6 +2,7 @@
 
 import Editor from "@monaco-editor/react";
 import type { ViewerMatch } from "@similarity/shared";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 import {
@@ -360,11 +361,64 @@ function LegendGroup({
   position: "left" | "right";
   title: string;
 }) {
+  const activeIndex = matches.findIndex((match) => match.matchId === activeMatchId);
+  const canSelectPrevious = activeIndex > 0;
+  const canSelectNext = activeIndex === -1 ? matches.length > 0 : activeIndex < matches.length - 1;
+
+  const selectPreviousMatch = () => {
+    if (!canSelectPrevious) {
+      return;
+    }
+
+    const previousMatch = matches[activeIndex - 1];
+    if (!previousMatch) {
+      return;
+    }
+
+    onSelectMatch(previousMatch.matchId);
+  };
+
+  const selectNextMatch = () => {
+    if (!canSelectNext) {
+      return;
+    }
+
+    const nextIndex = activeIndex === -1 ? 0 : activeIndex + 1;
+    const nextMatch = matches[nextIndex];
+    if (!nextMatch) {
+      return;
+    }
+
+    onSelectMatch(nextMatch.matchId);
+  };
+
   return (
     <section className={`legend-group legend-group-${position}`}>
       <div className="legend-group-head">
         <strong>{title}</strong>
         <span className="pair-note">{matches.length} {matches.length === 1 ? "match" : "matches"}</span>
+      </div>
+      <div className="legend-nav">
+        <button
+          type="button"
+          onClick={selectPreviousMatch}
+          disabled={!canSelectPrevious}
+          className="legend-nav-button"
+          aria-label={`Previous ${title.toLowerCase()}`}
+        >
+          <ChevronLeft size={14} />
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={selectNextMatch}
+          disabled={!canSelectNext}
+          className="legend-nav-button"
+          aria-label={`Next ${title.toLowerCase()}`}
+        >
+          Next
+          <ChevronRight size={14} />
+        </button>
       </div>
       <div className="legend-grid">
         {matches.map((match, index) => {
