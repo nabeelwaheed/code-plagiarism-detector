@@ -60,7 +60,10 @@ export function getUserFacingUploadFailureMessage(error: unknown) {
 
   if (
     normalizedMessage.startsWith("no relevant ")
-    && normalizedMessage.endsWith(" source files found in uploaded archive")
+    && (
+      normalizedMessage.endsWith(" source files found in uploaded archive")
+      || normalizedMessage.endsWith(" source files found after extraction")
+    )
   ) {
     return "No supported source files were found in that archive for this assignment language.";
   }

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
   Database,
   Download,
   Eye,
+  EyeOff,
   FileArchive,
   FileCode,
   Home,
@@ -42,6 +43,7 @@ import {
   getUploadBatch,
   updateAssignmentDueDate,
   uploadProfessorArchive,
+  type AssignmentArtifactDetail,
   type AssignmentDetail,
   type SubmissionIdentityRevealResponse,
 } from "../lib/api";
@@ -285,6 +287,12 @@ export function AssignmentWorkspace({
     );
   };
 
+  const toggleSelectedArtifact = (nextArtifact: Exclude<SelectedArtifact, null>) => {
+    setSelectedArtifact((current) =>
+      current?.type === nextArtifact.type && current.id === nextArtifact.id ? null : nextArtifact,
+    );
+  };
+
   const latestVisibleRun = useMemo(
     () =>
       assignmentQuery.data?.comparisonRuns.find(
@@ -368,6 +376,9 @@ export function AssignmentWorkspace({
   const sectionedPairs = partitionSuspiciousPairs(visiblePairs);
 
   const selectedArtifactKey = selectedArtifact ? `${selectedArtifact.type}:${selectedArtifact.id}` : null;
+  const selectedSubmissionId = selectedArtifact?.type === "submission" ? selectedArtifact.id : null;
+  const selectedSubmissionDetail = selectedArtifact?.type === "submission" ? artifactDetailQuery.data : undefined;
+  const selectedTemplateDetail = selectedArtifact?.type === "template" ? artifactDetailQuery.data : undefined;
   const hasActiveJobs =
     assignment.uploadBatches.some((b) => b.status === "received" || b.status === "processing") ||
     assignment.comparisonRuns.some((r) => r.status === "queued" || r.status === "running");
@@ -679,8 +690,19 @@ export function AssignmentWorkspace({
                   ) : (
                     <SubmissionTable
                       submissions={currentSubmissions}
-                      selectedKey={selectedArtifactKey}
-                      onSelect={(id) => setSelectedArtifact({ type: "submission", id })}
+                      selectedSubmissionId={selectedSubmissionId}
+                      selectedArtifactDetail={selectedSubmissionDetail}
+                      detailIsLoading={selectedArtifact?.type === "submission" && artifactDetailQuery.isLoading}
+                      detailErrorMessage={selectedArtifact?.type === "submission" ? artifactDetailQuery.error?.message ?? null : null}
+                      revealErrorMessage={revealIdentityMutation.error?.message ?? null}
+                      isRevealPending={revealIdentityMutation.isPending}
+                      revealedIdentity={revealedIdentity}
+                      onHideIdentity={() => {
+                        setRevealedIdentity(null);
+                        revealIdentityMutation.reset();
+                      }}
+                      onRevealIdentity={(id) => revealIdentityMutation.mutate(id)}
+                      onToggleSelect={(id) => toggleSelectedArtifact({ type: "submission", id })}
                       onDownload={(id) => downloadMutation.mutate({ type: "submission", id })}
                     />
                   )}
@@ -695,8 +717,19 @@ export function AssignmentWorkspace({
                   ) : (
                     <SubmissionTable
                       submissions={historicalSubmissions}
-                      selectedKey={selectedArtifactKey}
-                      onSelect={(id) => setSelectedArtifact({ type: "submission", id })}
+                      selectedSubmissionId={selectedSubmissionId}
+                      selectedArtifactDetail={selectedSubmissionDetail}
+                      detailIsLoading={selectedArtifact?.type === "submission" && artifactDetailQuery.isLoading}
+                      detailErrorMessage={selectedArtifact?.type === "submission" ? artifactDetailQuery.error?.message ?? null : null}
+                      revealErrorMessage={revealIdentityMutation.error?.message ?? null}
+                      isRevealPending={revealIdentityMutation.isPending}
+                      revealedIdentity={revealedIdentity}
+                      onHideIdentity={() => {
+                        setRevealedIdentity(null);
+                        revealIdentityMutation.reset();
+                      }}
+                      onRevealIdentity={(id) => revealIdentityMutation.mutate(id)}
+                      onToggleSelect={(id) => toggleSelectedArtifact({ type: "submission", id })}
                       onDownload={(id) => downloadMutation.mutate({ type: "submission", id })}
                     />
                   )}
@@ -744,9 +777,11 @@ export function AssignmentWorkspace({
                           <div style={{ display: "flex", gap: "0.4rem" }}>
                             <button
                               className="btn btn-outline btn-sm"
-                              onClick={() => setSelectedArtifact({ type: "template", id: t.id })}
+                              aria-label={selectedArtifactKey === `template:${t.id}` ? "Close template" : "View template"}
+                              title={selectedArtifactKey === `template:${t.id}` ? "Close" : "View"}
+                              onClick={() => toggleSelectedArtifact({ type: "template", id: t.id })}
                             >
-                              <Eye size={13} />
+                              {selectedArtifactKey === `template:${t.id}` ? <EyeOff size={13} /> : <Eye size={13} />}
                             </button>
                             <button
                               className="btn btn-outline btn-sm"
@@ -770,111 +805,39 @@ export function AssignmentWorkspace({
                   )}
                 </SectionBox>
 
-                {/* Viewer */}
-                {selectedArtifact && (
+                {/* Template viewer */}
+                {selectedArtifact?.type === "template" && (
                   <SectionBox
                     title={
-                      artifactDetailQuery.data
-                        ? `${artifactDetailQuery.data.kind === "template" ? `Template v${artifactDetailQuery.data.versionNumber ?? 1}` : capitalizeLabel(artifactDetailQuery.data.kind)} — ${artifactDetailQuery.data.displayName}`
+                      selectedTemplateDetail
+                        ? `Template v${selectedTemplateDetail.versionNumber ?? 1} - ${selectedTemplateDetail.displayName}`
                         : "Artifact Viewer"
                     }
                     action={
-                      artifactDetailQuery.data ? (
+                      selectedTemplateDetail ? (
                         <button
                           className="btn btn-outline btn-sm"
                           disabled={downloadMutation.isPending}
-                          onClick={() =>
-                            artifactDetailQuery.data!.kind === "template"
-                              ? downloadMutation.mutate({ type: "template", id: artifactDetailQuery.data!.id })
-                              : downloadMutation.mutate({ type: "submission", id: artifactDetailQuery.data!.id })
-                          }
+                          onClick={() => downloadMutation.mutate({ type: "template", id: selectedTemplateDetail.id })}
                         >
                           <Download size={13} /> Download
                         </button>
                       ) : undefined
                     }
                   >
-                    {artifactDetailQuery.isLoading ? (
-                      <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-tertiary)", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem" }}>
-                        <Loader2 size={16} className="anim-spin" /> Loading...
-                      </div>
-                    ) : artifactDetailQuery.error ? (
-                      <div className="alert alert-error" style={{ margin: "1rem" }}>
-                        {artifactDetailQuery.error.message}
-                      </div>
-                    ) : artifactDetailQuery.data ? (
-                      <div style={{ padding: "1rem" }}>
-                        {artifactDetailQuery.data.kind !== "template" && (
-                          <div style={{ marginBottom: "1rem" }}>
-                            <SubmissionIdentityPanel
-                              identityRevealMode={artifactDetailQuery.data.identityRevealMode}
-                              isRevealPending={revealIdentityMutation.isPending}
-                              onHide={() => { setRevealedIdentity(null); revealIdentityMutation.reset(); }}
-                              onReveal={
-                                artifactDetailQuery.data.identityRevealMode
-                                  ? () => revealIdentityMutation.mutate(artifactDetailQuery.data!.id)
-                                  : null
-                              }
-                              revealError={revealIdentityMutation.error?.message ?? null}
-                              revealedIdentity={revealedIdentity}
-                            />
-                          </div>
-                        )}
-                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                          {artifactDetailQuery.data.files.map((file) => {
-                            const isJunk = isLikelyJunkFile(file.relativePath, file.archivePath);
-                            return (
-                              <div
-                                key={file.id}
-                                style={{
-                                  borderRadius: "var(--radius-md)",
-                                  overflow: "hidden",
-                                  border: "1px solid rgba(15,23,42,0.1)",
-                                  opacity: isJunk ? 0.6 : 1,
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    background: "rgba(15,23,42,0.96)",
-                                    padding: "0.6rem 1rem",
-                                    borderBottom: "1px solid rgba(148,163,184,0.16)",
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                  }}
-                                >
-                                  <span style={{ color: "#e2e8f0", fontSize: "0.82rem", fontFamily: "var(--font-mono)" }}>
-                                    {file.relativePath}
-                                  </span>
-                                  {isJunk && (
-                                    <span style={{ fontSize: "0.65rem", color: "rgba(203,213,225,0.6)", background: "rgba(255,255,255,0.08)", padding: "0.1rem 0.4rem", borderRadius: "var(--radius-sm)" }}>
-                                      system file
-                                    </span>
-                                  )}
-                                </div>
-                                <pre
-                                  style={{
-                                    margin: 0,
-                                    padding: "1rem",
-                                    background: "#0f172a",
-                                    color: "#e2e8f0",
-                                    fontSize: "0.82rem",
-                                    fontFamily: "var(--font-mono)",
-                                    lineHeight: 1.6,
-                                    overflow: "auto",
-                                    maxHeight: 400,
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {file.contents}
-                                </pre>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
+                    <ArtifactDetailBody
+                      artifact={selectedTemplateDetail}
+                      isLoading={artifactDetailQuery.isLoading}
+                      errorMessage={artifactDetailQuery.error?.message ?? null}
+                      isRevealPending={revealIdentityMutation.isPending}
+                      onHideIdentity={() => {
+                        setRevealedIdentity(null);
+                        revealIdentityMutation.reset();
+                      }}
+                      onRevealIdentity={null}
+                      revealErrorMessage={revealIdentityMutation.error?.message ?? null}
+                      revealedIdentity={revealedIdentity}
+                    />
                   </SectionBox>
                 )}
               </div>
@@ -1013,11 +976,30 @@ export function AssignmentWorkspace({
                       </span>
                     </div>
                     <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)" }}>
-                      {getUploadSummary(latestUpload.status, latestUpload.errorMessage)}
+                      {getUploadSummary(
+                        latestUpload.status,
+                        latestUpload.errorMessage,
+                        latestUpload.warningMessage,
+                      )}
                     </p>
                     {latestUpload.errorMessage && (
                       <div className="alert alert-error" style={{ marginTop: "0.75rem", fontSize: "0.82rem" }}>
                         {latestUpload.errorMessage}
+                      </div>
+                    )}
+                    {!latestUpload.errorMessage && latestUpload.warningMessage && (
+                      <div
+                        style={{
+                          marginTop: "0.75rem",
+                          padding: "0.75rem 0.85rem",
+                          borderRadius: "var(--radius-md)",
+                          background: "var(--accent-yellow-soft)",
+                          border: "1px solid rgba(217,119,6,0.2)",
+                          color: "#92400e",
+                          fontSize: "0.82rem",
+                        }}
+                      >
+                        {latestUpload.warningMessage}
                       </div>
                     )}
                   </div>
@@ -1193,6 +1175,11 @@ export function AssignmentWorkspace({
                             {batch.errorMessage && (
                               <div style={{ fontSize: "0.75rem", color: "var(--accent-red)", marginTop: "0.2rem" }}>
                                 {batch.errorMessage.slice(0, 80)}{batch.errorMessage.length > 80 ? "..." : ""}
+                              </div>
+                            )}
+                            {!batch.errorMessage && batch.warningMessage && (
+                              <div style={{ fontSize: "0.75rem", color: "#92400e", marginTop: "0.2rem" }}>
+                                {batch.warningMessage.slice(0, 100)}{batch.warningMessage.length > 100 ? "..." : ""}
                               </div>
                             )}
                           </div>
@@ -1471,15 +1458,159 @@ function SubmissionDeletePreview({ submission }: { submission: SubmissionDeleteT
   );
 }
 
+function ArtifactDetailBody({
+  artifact,
+  isLoading,
+  errorMessage,
+  isRevealPending,
+  onHideIdentity,
+  onRevealIdentity,
+  revealErrorMessage,
+  revealedIdentity,
+}: {
+  artifact: AssignmentArtifactDetail | undefined;
+  isLoading: boolean;
+  errorMessage: string | null;
+  isRevealPending: boolean;
+  onHideIdentity: () => void;
+  onRevealIdentity: (() => void) | null;
+  revealErrorMessage: string | null;
+  revealedIdentity: SubmissionIdentityRevealResponse | null;
+}) {
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          padding: "1.5rem",
+          textAlign: "center",
+          color: "var(--text-tertiary)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.6rem",
+        }}
+      >
+        <Loader2 size={16} className="anim-spin" /> Loading...
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="alert alert-error" style={{ margin: "1rem" }}>
+        {errorMessage}
+      </div>
+    );
+  }
+
+  if (!artifact) {
+    return null;
+  }
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      {artifact.kind !== "template" && (
+        <div style={{ marginBottom: "1rem" }}>
+          <SubmissionIdentityPanel
+            identityRevealMode={artifact.identityRevealMode}
+            isRevealPending={isRevealPending}
+            onHide={onHideIdentity}
+            onReveal={artifact.identityRevealMode ? onRevealIdentity : null}
+            revealError={revealErrorMessage}
+            revealedIdentity={revealedIdentity}
+          />
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        {artifact.files.map((file) => {
+          const isJunk = isLikelyJunkFile(file.relativePath, file.archivePath);
+          return (
+            <div
+              key={file.id}
+              style={{
+                borderRadius: "var(--radius-md)",
+                overflow: "hidden",
+                border: "1px solid rgba(15,23,42,0.1)",
+                opacity: isJunk ? 0.6 : 1,
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(15,23,42,0.96)",
+                  padding: "0.6rem 1rem",
+                  borderBottom: "1px solid rgba(148,163,184,0.16)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ color: "#e2e8f0", fontSize: "0.82rem", fontFamily: "var(--font-mono)" }}>
+                  {file.relativePath}
+                </span>
+                {isJunk && (
+                  <span
+                    style={{
+                      fontSize: "0.65rem",
+                      color: "rgba(203,213,225,0.6)",
+                      background: "rgba(255,255,255,0.08)",
+                      padding: "0.1rem 0.4rem",
+                      borderRadius: "var(--radius-sm)",
+                    }}
+                  >
+                    system file
+                  </span>
+                )}
+              </div>
+              <pre
+                style={{
+                  margin: 0,
+                  padding: "1rem",
+                  background: "#0f172a",
+                  color: "#e2e8f0",
+                  fontSize: "0.82rem",
+                  fontFamily: "var(--font-mono)",
+                  lineHeight: 1.6,
+                  overflow: "auto",
+                  maxHeight: 400,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {file.contents}
+              </pre>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SubmissionTable({
   submissions,
-  selectedKey,
-  onSelect,
+  selectedSubmissionId,
+  selectedArtifactDetail,
+  detailIsLoading,
+  detailErrorMessage,
+  isRevealPending,
+  onHideIdentity,
+  onRevealIdentity,
+  revealErrorMessage,
+  revealedIdentity,
+  onToggleSelect,
   onDownload,
 }: {
   submissions: Array<{ id: string; displayName: string; fileCount: number; createdAt: string; kind: string }>;
-  selectedKey: string | null;
-  onSelect: (id: string) => void;
+  selectedSubmissionId: string | null;
+  selectedArtifactDetail: AssignmentArtifactDetail | undefined;
+  detailIsLoading: boolean;
+  detailErrorMessage: string | null;
+  isRevealPending: boolean;
+  onHideIdentity: () => void;
+  onRevealIdentity: (id: string) => void;
+  revealErrorMessage: string | null;
+  revealedIdentity: SubmissionIdentityRevealResponse | null;
+  onToggleSelect: (id: string) => void;
   onDownload: (id: string) => void;
 }) {
   return (
@@ -1494,26 +1625,80 @@ function SubmissionTable({
           </tr>
         </thead>
         <tbody>
-          {submissions.map((s) => (
-            <tr
-              key={s.id}
-              style={{ background: selectedKey === `submission:${s.id}` ? "var(--brand-soft)" : undefined }}
-            >
-              <td style={{ fontWeight: 600, fontSize: "0.875rem" }}>{s.displayName}</td>
-              <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }}>{s.fileCount}</td>
-              <td style={{ fontSize: "0.8rem" }}>{formatDateTime(s.createdAt)}</td>
-              <td style={{ textAlign: "right" }}>
-                <div style={{ display: "inline-flex", gap: "0.4rem" }}>
-                  <button className="btn btn-outline btn-sm" onClick={() => onSelect(s.id)} title="View">
-                    <Eye size={13} />
-                  </button>
-                  <button className="btn btn-outline btn-sm" onClick={() => onDownload(s.id)} title="Download">
-                    <Download size={13} />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+          {submissions.map((s) => {
+            const isSelected = selectedSubmissionId === s.id;
+
+            return (
+              <Fragment key={s.id}>
+                <tr style={{ background: isSelected ? "var(--brand-soft)" : undefined }}>
+                  <td style={{ fontWeight: 600, fontSize: "0.875rem" }}>{s.displayName}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.82rem" }}>{s.fileCount}</td>
+                  <td style={{ fontSize: "0.8rem" }}>{formatDateTime(s.createdAt)}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-flex", gap: "0.4rem" }}>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        aria-label={isSelected ? "Close submission" : "View submission"}
+                        onClick={() => onToggleSelect(s.id)}
+                        title={isSelected ? "Close" : "View"}
+                      >
+                        {isSelected ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                      <button className="btn btn-outline btn-sm" onClick={() => onDownload(s.id)} title="Download">
+                        <Download size={13} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {isSelected && (
+                  <tr style={{ background: "var(--brand-soft)" }}>
+                    <td colSpan={4} style={{ padding: 0 }}>
+                      <div style={{ padding: "0 1rem 1rem" }}>
+                        <div
+                          style={{
+                            borderTop: "1px solid var(--border-subtle)",
+                            paddingTop: "0.9rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "0.75rem",
+                              padding: "0 0 0.75rem",
+                            }}
+                          >
+                            <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>
+                              {selectedArtifactDetail
+                                ? `${capitalizeLabel(selectedArtifactDetail.kind)} - ${selectedArtifactDetail.displayName}`
+                                : `${capitalizeLabel(s.kind)} - ${s.displayName}`}
+                            </div>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => onDownload(s.id)}
+                            >
+                              <Download size={13} /> Download
+                            </button>
+                          </div>
+                          <ArtifactDetailBody
+                            artifact={selectedArtifactDetail}
+                            isLoading={detailIsLoading}
+                            errorMessage={detailErrorMessage}
+                            isRevealPending={isRevealPending}
+                            onHideIdentity={onHideIdentity}
+                            onRevealIdentity={() => onRevealIdentity(s.id)}
+                            revealErrorMessage={revealErrorMessage}
+                            revealedIdentity={revealedIdentity}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -1721,8 +1906,13 @@ function formatUploadPurpose(purpose: string) {
   return capitalizeLabel(purpose.replace(/[_-]+/g, " "));
 }
 
-function getUploadSummary(status: string, errorMessage: string | null) {
+function getUploadSummary(
+  status: string,
+  errorMessage: string | null,
+  warningMessage: string | null,
+) {
   if (errorMessage) return errorMessage.trim().slice(0, 120);
+  if (warningMessage) return "This upload finished with warnings.";
   const s = status.toLowerCase();
   if (s === "ready" || s === "completed") return "This upload finished successfully.";
   if (s === "failed") return "This upload did not finish successfully.";

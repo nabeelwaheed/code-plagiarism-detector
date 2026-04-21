@@ -308,6 +308,8 @@ export class SubmissionsService {
       purpose: uploadBatch.purpose.toLowerCase(),
       status: uploadBatch.status.toLowerCase(),
       errorMessage: uploadBatch.errorMessage,
+      warningMessage: uploadBatch.warningMessage ?? null,
+      skippedSubmissionCount: uploadBatch.skippedSubmissionCount ?? 0,
       createdAt: uploadBatch.createdAt,
       updatedAt: uploadBatch.updatedAt,
       submissions: uploadBatch.submissions.map((submission) => ({
@@ -359,6 +361,8 @@ export class SubmissionsService {
       purpose: uploadBatch.purpose.toLowerCase(),
       status: uploadBatch.status.toLowerCase(),
       errorMessage: uploadBatch.errorMessage,
+      warningMessage: uploadBatch.warningMessage ?? null,
+      skippedSubmissionCount: uploadBatch.skippedSubmissionCount ?? 0,
       createdAt: uploadBatch.createdAt,
       updatedAt: uploadBatch.updatedAt,
       submissions: uploadBatch.submissions.map((submission) => ({

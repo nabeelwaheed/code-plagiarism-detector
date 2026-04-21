@@ -23,12 +23,24 @@ import type {
 
 const prisma = new PrismaClient();
 
+interface PreparedUploadWarningSummary {
+  skippedSubmissionCount: number;
+  warningMessage: string | null;
+}
+
+export interface PreparedUploadArtifacts {
+  submissions?: PreparedSubmissionPersistenceInput[];
+  template?: PreparedTemplatePersistenceInput;
+  skippedSubmissionCount?: number;
+  warningMessage?: string | null;
+}
+
 export async function prepareUploadArtifacts(input: {
   assignmentId: string;
   assignmentLanguage: AssignmentLanguage;
   uploadBatchId: string;
   kind: "current" | "historical" | "template" | "bulk_current";
-}) {
+}): Promise<PreparedUploadArtifacts> {
   const uploadBatch = await prisma.uploadBatch.findUniqueOrThrow({
     where: { id: input.uploadBatchId },
     select: {
@@ -69,14 +81,12 @@ export async function prepareUploadArtifacts(input: {
   }
 
   if (input.kind === "bulk_current") {
-    return {
-      submissions: await prepareBulkCurrentSubmissionArtifacts({
-        assignmentId: input.assignmentId,
-        assignmentLanguage: input.assignmentLanguage,
-        uploadBatchId: input.uploadBatchId,
-        archiveBuffer,
-      }),
-    };
+    return prepareBulkCurrentSubmissionArtifacts({
+      assignmentId: input.assignmentId,
+      assignmentLanguage: input.assignmentLanguage,
+      uploadBatchId: input.uploadBatchId,
+      archiveBuffer,
+    });
   }
 
   return {
@@ -128,42 +138,79 @@ async function prepareHistoricalSubmissionArtifacts(input: {
   return submissions;
 }
 
-async function prepareBulkCurrentSubmissionArtifacts(input: {
+export async function prepareBulkCurrentSubmissionArtifacts(input: {
   assignmentId: string;
   assignmentLanguage: AssignmentLanguage;
   uploadBatchId: string;
   archiveBuffer: Buffer;
-}) {
+}): Promise<PreparedUploadArtifacts & { submissions: PreparedSubmissionPersistenceInput[] }> {
   const childZipPaths = resolveChildSubmissionZipPaths({
     archiveKind: "bulk_current",
     entries: listArchiveEntries(input.archiveBuffer),
   });
   const sanitizedNames = new Set<string>();
   const submissions: PreparedSubmissionPersistenceInput[] = [];
+  let skippedSubmissionCount = 0;
 
   for (const childZipPath of childZipPaths) {
     const displayName = sanitizeBulkSubmissionDisplayName(childZipPath);
-
-    if (sanitizedNames.has(displayName)) {
-      throw new Error("bulk current archive contains duplicate submission names after sanitization");
-    }
-
-    sanitizedNames.add(displayName);
-
     const childArchiveBuffer = readArchiveEntryBuffer(input.archiveBuffer, childZipPath);
-    submissions.push(
-      await prepareSingleSubmissionArtifacts({
+
+    try {
+      const preparedSubmission = await prepareSingleSubmissionArtifacts({
         assignmentId: input.assignmentId,
         assignmentLanguage: input.assignmentLanguage,
         uploadBatchId: input.uploadBatchId,
         archiveBuffer: childArchiveBuffer,
         displayName,
         kind: "current",
-      }),
+      });
+
+      if (sanitizedNames.has(displayName)) {
+        throw new Error("bulk current archive contains duplicate submission names after sanitization");
+      }
+
+      sanitizedNames.add(displayName);
+      submissions.push(preparedSubmission);
+    } catch (error) {
+      if (!isNoSupportedSourceFilesError(error)) {
+        throw error;
+      }
+
+      skippedSubmissionCount += 1;
+      console.warn(
+        "skipping bulk current child archive with no supported source files",
+        {
+          assignmentId: input.assignmentId,
+          uploadBatchId: input.uploadBatchId,
+          childZipPath,
+        },
+      );
+    }
+  }
+
+  if (submissions.length === 0) {
+    throw new Error(
+      `no relevant ${input.assignmentLanguage} source files found in uploaded archive`,
     );
   }
 
-  return submissions;
+  const warningSummary = buildSkippedSubmissionWarningSummary(skippedSubmissionCount);
+  if (warningSummary.warningMessage) {
+    console.warn(
+      "bulk current upload completed with skipped child archives",
+      {
+        assignmentId: input.assignmentId,
+        uploadBatchId: input.uploadBatchId,
+        skippedSubmissionCount,
+      },
+    );
+  }
+
+  return {
+    submissions,
+    ...warningSummary,
+  };
 }
 
 async function prepareTemplateArtifacts(input: {
@@ -314,4 +361,31 @@ function sanitizeBulkSubmissionDisplayName(childZipPath: string) {
   }
 
   return sanitized;
+}
+
+function isNoSupportedSourceFilesError(error: unknown) {
+  const message = error instanceof Error ? error.message.trim().toLowerCase() : "";
+  return (
+    (message.startsWith("no relevant ") && message.endsWith(" source files found in uploaded archive"))
+    || (message.startsWith("no relevant ") && message.endsWith(" source files found after extraction"))
+  );
+}
+
+function buildSkippedSubmissionWarningSummary(
+  skippedSubmissionCount: number,
+): PreparedUploadWarningSummary {
+  if (skippedSubmissionCount <= 0) {
+    return {
+      skippedSubmissionCount: 0,
+      warningMessage: null,
+    };
+  }
+
+  return {
+    skippedSubmissionCount,
+    warningMessage:
+      skippedSubmissionCount === 1
+        ? "1 submission was skipped because it contained no supported source files for this assignment language."
+        : `${skippedSubmissionCount} submissions were skipped because they contained no supported source files for this assignment language.`,
+  };
 }

@@ -261,6 +261,8 @@ export class AssignmentsService {
         purpose: batch.purpose.toLowerCase(),
         status: batch.status.toLowerCase(),
         errorMessage: batch.errorMessage,
+        warningMessage: batch.warningMessage ?? null,
+        skippedSubmissionCount: batch.skippedSubmissionCount ?? 0,
         createdAt: batch.createdAt,
         updatedAt: batch.updatedAt,
       })),

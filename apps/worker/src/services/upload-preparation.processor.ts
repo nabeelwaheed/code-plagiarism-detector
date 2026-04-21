@@ -74,12 +74,17 @@ export async function processUploadPreparationJob(job: UploadPreparationJob) {
         job.assignmentId,
         job.uploadBatchId,
         preparedArtifacts.submissions,
+        {
+          skippedSubmissionCount: preparedArtifacts.skippedSubmissionCount,
+          warningMessage: preparedArtifacts.warningMessage,
+        },
       );
       return {
         assignmentId: job.assignmentId,
         uploadBatchId: job.uploadBatchId,
         status: "prepared",
         preparedCount: preparedArtifacts.submissions.length,
+        skippedSubmissionCount: preparedArtifacts.skippedSubmissionCount ?? 0,
       };
     }
 

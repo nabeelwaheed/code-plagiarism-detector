@@ -325,6 +325,21 @@ export function StudentSubmissionPanel() {
               {uploadSummary.errorMessage}
             </div>
           )}
+          {!uploadSummary.errorMessage && uploadSummary.warningMessage && (
+            <div
+              style={{
+                marginBottom: "0.75rem",
+                padding: "0.75rem 0.85rem",
+                borderRadius: "var(--radius-md)",
+                background: "var(--accent-yellow-soft)",
+                border: "1px solid rgba(217,119,6,0.2)",
+                color: "#92400e",
+                fontSize: "0.82rem",
+              }}
+            >
+              {uploadSummary.warningMessage}
+            </div>
+          )}
           {uploadSummary.submissions.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
               {uploadSummary.submissions.map((s) => (

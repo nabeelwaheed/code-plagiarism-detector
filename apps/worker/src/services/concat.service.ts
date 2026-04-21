@@ -6,13 +6,17 @@ export const LANGUAGE_SUFFIXES: Record<AssignmentLanguage, string[]> = {
   cpp: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".h"],
 };
 
+export function matchesLanguageSourceSuffix(language: AssignmentLanguage, filePath: string) {
+  const lowerFilePath = filePath.toLowerCase();
+  return LANGUAGE_SUFFIXES[language].some((suffix) => lowerFilePath.endsWith(suffix));
+}
+
 export function selectRelevantSourceFiles(
   language: AssignmentLanguage,
   files: ExtractedSourceFile[],
 ): ExtractedSourceFile[] {
-  const allowedSuffixes = LANGUAGE_SUFFIXES[language];
   return files
-    .filter((file) => allowedSuffixes.some((suffix) => file.relativePath.endsWith(suffix)))
+    .filter((file) => matchesLanguageSourceSuffix(language, file.relativePath))
     .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 

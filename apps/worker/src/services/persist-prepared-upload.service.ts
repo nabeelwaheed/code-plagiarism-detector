@@ -40,6 +40,10 @@ export async function persistPreparedSubmissions(
   assignmentId: string,
   uploadBatchId: string,
   submissions: PreparedSubmissionPersistenceInput[],
+  summary?: {
+    skippedSubmissionCount?: number;
+    warningMessage?: string | null;
+  },
 ) {
   await prisma.$transaction(async (tx) => {
     for (const submission of submissions) {
@@ -75,7 +79,12 @@ export async function persistPreparedSubmissions(
 
     await tx.uploadBatch.update({
       where: { id: uploadBatchId },
-      data: { status: "READY" },
+      data: {
+        status: "READY",
+        errorMessage: null,
+        warningMessage: summary?.warningMessage ?? null,
+        skippedSubmissionCount: summary?.skippedSubmissionCount ?? 0,
+      },
     });
 
     await tx.assignment.update({
@@ -133,7 +142,12 @@ export async function persistPreparedTemplate(
 
     await tx.uploadBatch.update({
       where: { id: uploadBatchId },
-      data: { status: "READY" },
+      data: {
+        status: "READY",
+        errorMessage: null,
+        warningMessage: null,
+        skippedSubmissionCount: 0,
+      },
     });
 
     await tx.assignment.update({
@@ -153,6 +167,8 @@ export async function markUploadBatchProcessing(uploadBatchId: string) {
     data: {
       status: "PROCESSING",
       errorMessage: null,
+      warningMessage: null,
+      skippedSubmissionCount: 0,
     },
   });
 }
@@ -163,6 +179,8 @@ export async function markUploadBatchFailed(uploadBatchId: string, message: stri
     data: {
       status: "FAILED",
       errorMessage: message,
+      warningMessage: null,
+      skippedSubmissionCount: 0,
     },
   });
 }

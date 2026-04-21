@@ -7,7 +7,7 @@ import type {
   ExtractedSourceFile,
 } from "@similarity/shared";
 import { workerRuntimeConfig } from "../config/runtime-config.js";
-import { LANGUAGE_SUFFIXES } from "./concat.service.js";
+import { matchesLanguageSourceSuffix } from "./concat.service.js";
 
 interface ExtractionState {
   sourceFileCount: number;
@@ -179,8 +179,7 @@ function isIgnoredArchiveJunk(entryPath: string) {
 }
 
 function isRelevantSourceFile(language: AssignmentLanguage, entryPath: string) {
-  const lowerEntryPath = entryPath.toLowerCase();
-  return LANGUAGE_SUFFIXES[language].some((suffix) => lowerEntryPath.endsWith(suffix));
+  return matchesLanguageSourceSuffix(language, entryPath);
 }
 
 function formatRelativePath(nestedArchiveChain: string[], entryPath: string) {

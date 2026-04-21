@@ -64,3 +64,31 @@ test("extractSourceFilesFromSubmissionArchive applies the junk filter case-insen
     ["Real.java"],
   );
 });
+
+test("extractSourceFilesFromSubmissionArchive accepts mixed-case source extensions", () => {
+  const archiveBuffer = Buffer.from(
+    zipSync({
+      "Main.JAVA": Buffer.from("class Main {}\n"),
+      "nested/Solver.CPP": Buffer.from("int solve() { return 1; }\n"),
+      "include/Util.H": Buffer.from("int util();\n"),
+    }),
+  );
+
+  const javaFiles = extractSourceFilesFromSubmissionArchive({
+    assignmentLanguage: "java",
+    archiveBuffer,
+  });
+  const cppFiles = extractSourceFilesFromSubmissionArchive({
+    assignmentLanguage: "cpp",
+    archiveBuffer,
+  });
+
+  assert.deepEqual(
+    javaFiles.map((file) => file.relativePath),
+    ["Main.JAVA"],
+  );
+  assert.deepEqual(
+    cppFiles.map((file) => file.relativePath),
+    ["include/Util.H", "nested/Solver.CPP"],
+  );
+});

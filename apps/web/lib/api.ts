@@ -64,6 +64,8 @@ export interface AssignmentDetail {
     purpose: string;
     status: string;
     errorMessage: string | null;
+    warningMessage: string | null;
+    skippedSubmissionCount: number;
     createdAt: string;
     updatedAt: string;
   }>;
@@ -128,6 +130,8 @@ export interface UploadBatchDetail {
   purpose: string;
   status: string;
   errorMessage: string | null;
+  warningMessage: string | null;
+  skippedSubmissionCount: number;
   createdAt: string;
   updatedAt: string;
   submissions: Array<{
@@ -150,6 +154,8 @@ export interface PublicUploadBatchDetail {
   purpose: string;
   status: string;
   errorMessage: string | null;
+  warningMessage: string | null;
+  skippedSubmissionCount: number;
   createdAt: string;
   updatedAt: string;
   submissions: Array<{
