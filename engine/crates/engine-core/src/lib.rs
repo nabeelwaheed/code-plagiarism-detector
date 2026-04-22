@@ -3,7 +3,7 @@ use engine_contracts::{
     PositionMetadata, SCHEMA_VERSION, SourceMapEntry, TokenMetadata,
 };
 use engine_gst::{run_gst, Tile};
-use engine_language::{parse_submission, CommentToken, ParsedSubmission};
+use engine_language::{parse_submission, CodeToken, CommentToken, ParsedSubmission};
 use std::collections::{BTreeMap, HashMap};
 
 const TEMPLATE_MASK_THRESHOLD: usize = 10;
@@ -45,8 +45,8 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
 
         let left_mask = build_template_mask(left, processed_template.as_ref());
         let right_mask = build_template_mask(right, processed_template.as_ref());
-        let left_active_indices = build_active_token_indices(&left_mask);
-        let right_active_indices = build_active_token_indices(&right_mask);
+        let left_active_indices = build_active_token_indices(left, &left_mask);
+        let right_active_indices = build_active_token_indices(right, &right_mask);
         let left_active_token_count = active_code_token_count(&left_mask);
         let right_active_token_count = active_code_token_count(&right_mask);
 
@@ -60,6 +60,8 @@ pub fn analyze(request: AnalysisRequest) -> Result<AnalysisResponse, String> {
 
         let meaningful_regions = build_meaningful_code_regions(
             &gst_result.tiles,
+            left,
+            right,
             left_active_token_count,
             right_active_token_count,
             &left_active_indices,
@@ -201,7 +203,7 @@ fn build_template_mask(
         TEMPLATE_MASK_THRESHOLD,
     );
 
-    for tile in gst_result.tiles {
+    for tile in split_tiles_on_structural_gaps(&gst_result.tiles, submission, template) {
         if tile.length >= TEMPLATE_MASK_THRESHOLD {
             for offset in 0..tile.length {
                 mask[tile.left_start + offset] = true;
@@ -217,6 +219,10 @@ struct ActiveTile {
     tile: Tile,
     left_active_start: usize,
     right_active_start: usize,
+    left_unit_start: usize,
+    left_unit_end: usize,
+    right_unit_start: usize,
+    right_unit_end: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -294,16 +300,23 @@ fn filter_meaningful_code_tiles(tiles: &[Tile], left_len: usize, right_len: usiz
         .collect()
 }
 
-fn build_active_token_indices(mask: &[bool]) -> Vec<Option<usize>> {
+fn build_active_token_indices(
+    submission: &ParsedSubmission,
+    mask: &[bool],
+) -> Vec<Option<usize>> {
     let mut indices = Vec::with_capacity(mask.len());
-    let mut next_active_index = 0usize;
+    let mut masked_before = 0usize;
 
-    for masked in mask {
+    for (index, masked) in mask.iter().enumerate() {
         if *masked {
             indices.push(None);
+            masked_before += 1;
         } else {
-            indices.push(Some(next_active_index));
-            next_active_index += 1;
+            indices.push(Some(
+                submission.code_tokens[index]
+                    .unit_index
+                    .saturating_sub(masked_before),
+            ));
         }
     }
 
@@ -312,19 +325,26 @@ fn build_active_token_indices(mask: &[bool]) -> Vec<Option<usize>> {
 
 fn build_meaningful_code_regions(
     tiles: &[Tile],
+    left: &ParsedSubmission,
+    right: &ParsedSubmission,
     left_len: usize,
     right_len: usize,
     left_active_indices: &[Option<usize>],
     right_active_indices: &[Option<usize>],
 ) -> Vec<CodeRegion> {
     let threshold = meaningful_tile_threshold(left_len, right_len);
-    let mut active_tiles = tiles
+    let structural_tiles = split_tiles_on_structural_gaps(tiles, left, right);
+    let mut active_tiles = structural_tiles
         .iter()
         .filter_map(|tile| {
             Some(ActiveTile {
                 tile: tile.clone(),
                 left_active_start: left_active_indices.get(tile.left_start).copied().flatten()?,
                 right_active_start: right_active_indices.get(tile.right_start).copied().flatten()?,
+                left_unit_start: left.code_tokens.get(tile.left_start)?.unit_index,
+                left_unit_end: left.code_tokens.get(tile.left_start + tile.length - 1)?.unit_index,
+                right_unit_start: right.code_tokens.get(tile.right_start)?.unit_index,
+                right_unit_end: right.code_tokens.get(tile.right_start + tile.length - 1)?.unit_index,
             })
         })
         .collect::<Vec<_>>();
@@ -448,10 +468,10 @@ fn build_cluster_region(fragments: &[ActiveTile], threshold: usize) -> Option<Co
             return None;
         }
 
-        let previous_left_end = previous.tile.left_start + previous.tile.length;
-        let previous_right_end = previous.tile.right_start + previous.tile.length;
-        let left_original_gap = next.tile.left_start.checked_sub(previous_left_end)?;
-        let right_original_gap = next.tile.right_start.checked_sub(previous_right_end)?;
+        let previous_left_end = previous.left_unit_end + 1;
+        let previous_right_end = previous.right_unit_end + 1;
+        let left_original_gap = next.left_unit_start.checked_sub(previous_left_end)?;
+        let right_original_gap = next.right_unit_start.checked_sub(previous_right_end)?;
         let left_active_gap = next
             .left_active_start
             .checked_sub(previous.left_active_start + previous.tile.length)?;
@@ -571,6 +591,73 @@ fn active_code_token_count(mask: &[bool]) -> usize {
     mask.iter().filter(|masked| !**masked).count()
 }
 
+fn split_tiles_on_structural_gaps(
+    tiles: &[Tile],
+    left: &ParsedSubmission,
+    right: &ParsedSubmission,
+) -> Vec<Tile> {
+    let mut split_tiles = Vec::new();
+
+    for tile in tiles {
+        if tile.length == 0 {
+            continue;
+        }
+
+        let mut fragment_offset = 0usize;
+        for offset in 1..tile.length {
+            let left_gap = hidden_structural_gap(
+                &left.code_tokens,
+                tile.left_start + offset - 1,
+                tile.left_start + offset,
+            );
+            let right_gap = hidden_structural_gap(
+                &right.code_tokens,
+                tile.right_start + offset - 1,
+                tile.right_start + offset,
+            );
+
+            if left_gap > 0 || right_gap > 0 {
+                let fragment_length = offset - fragment_offset;
+                if fragment_length > 0 {
+                    split_tiles.push(Tile {
+                        left_start: tile.left_start + fragment_offset,
+                        right_start: tile.right_start + fragment_offset,
+                        length: fragment_length,
+                    });
+                }
+                fragment_offset = offset;
+            }
+        }
+
+        let trailing_length = tile.length - fragment_offset;
+        if trailing_length > 0 {
+            split_tiles.push(Tile {
+                left_start: tile.left_start + fragment_offset,
+                right_start: tile.right_start + fragment_offset,
+                length: trailing_length,
+            });
+        }
+    }
+
+    split_tiles
+}
+
+fn hidden_structural_gap(
+    code_tokens: &[CodeToken],
+    previous_index: usize,
+    next_index: usize,
+) -> usize {
+    let Some(previous) = code_tokens.get(previous_index) else {
+        return 0;
+    };
+    let Some(next) = code_tokens.get(next_index) else {
+        return 0;
+    };
+
+    next.unit_index
+        .saturating_sub(previous.unit_index + 1)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct CodeSimilarityMetrics {
     coverage_left: f64,
@@ -587,6 +674,26 @@ struct CodeSimilarityMetrics {
 }
 
 #[cfg(test)]
+fn identity_submission(len: usize) -> ParsedSubmission {
+    ParsedSubmission {
+        normalized_tokens: (0..len).map(|index| format!("T{index}")).collect(),
+        code_tokens: (0..len)
+            .map(|index| CodeToken {
+                normalized_value: format!("T{index}"),
+                raw_text: format!("t{index}"),
+                byte_start: index,
+                byte_end: index + 1,
+                node_kind: "test".to_string(),
+                unit_index: index,
+            })
+            .collect(),
+        comment_tokens: Vec::new(),
+        line_starts: vec![0],
+        source_map: Vec::new(),
+    }
+}
+
+#[cfg(test)]
 fn compute_code_similarity_score(
     tiles: &[Tile],
     _matched_token_count: usize,
@@ -594,10 +701,14 @@ fn compute_code_similarity_score(
     right_len: usize,
     gst_min_match_length: usize,
 ) -> f64 {
+    let left_submission = identity_submission(left_len);
+    let right_submission = identity_submission(right_len);
     let left_active_indices = (0..left_len).map(Some).collect::<Vec<_>>();
     let right_active_indices = (0..right_len).map(Some).collect::<Vec<_>>();
     let meaningful_regions = build_meaningful_code_regions(
         tiles,
+        &left_submission,
+        &right_submission,
         left_len,
         right_len,
         &left_active_indices,
@@ -619,10 +730,14 @@ fn compute_code_similarity_metrics(
     right_len: usize,
     gst_min_match_length: usize,
 ) -> CodeSimilarityMetrics {
+    let left_submission = identity_submission(left_len);
+    let right_submission = identity_submission(right_len);
     let left_active_indices = (0..left_len).map(Some).collect::<Vec<_>>();
     let right_active_indices = (0..right_len).map(Some).collect::<Vec<_>>();
     let meaningful_regions = build_meaningful_code_regions(
         tiles,
+        &left_submission,
+        &right_submission,
         left_len,
         right_len,
         &left_active_indices,
@@ -982,13 +1097,14 @@ mod tests {
         active_code_token_count, analyze, build_cluster_region, build_meaningful_code_regions,
         build_template_mask, compute_code_similarity_metrics, compute_code_similarity_score,
         exact_matched_token_count, filter_meaningful_code_tiles, gap_burden_is_acceptable,
-        map_code_matches, meaningful_tile_threshold, ActiveTile, CodeRegion, TEMPLATE_MASK_THRESHOLD,
+        identity_submission, map_code_matches, meaningful_tile_threshold,
+        split_tiles_on_structural_gaps, ActiveTile, CodeRegion, TEMPLATE_MASK_THRESHOLD,
     };
     use engine_contracts::{
         AnalysisLanguage, AnalysisPair, AnalysisParams, AnalysisRequest, AnalysisSubmission,
         SourceMapEntry, TemplateSource, SCHEMA_VERSION, SubmissionKind,
     };
-    use engine_gst::Tile;
+    use engine_gst::{run_gst, Tile};
     use engine_language::parse_submission;
 
     fn identity_active_indices(len: usize) -> Vec<Option<usize>> {
@@ -1000,9 +1116,19 @@ mod tests {
         left_len: usize,
         right_len: usize,
     ) -> Vec<CodeRegion> {
+        let left_submission = identity_submission(left_len);
+        let right_submission = identity_submission(right_len);
         let left_indices = identity_active_indices(left_len);
         let right_indices = identity_active_indices(right_len);
-        build_meaningful_code_regions(tiles, left_len, right_len, &left_indices, &right_indices)
+        build_meaningful_code_regions(
+            tiles,
+            &left_submission,
+            &right_submission,
+            left_len,
+            right_len,
+            &left_indices,
+            &right_indices,
+        )
     }
 
     fn active_tile(left_start: usize, right_start: usize, length: usize) -> ActiveTile {
@@ -1014,6 +1140,34 @@ mod tests {
             },
             left_active_start: left_start,
             right_active_start: right_start,
+            left_unit_start: left_start,
+            left_unit_end: left_start + length - 1,
+            right_unit_start: right_start,
+            right_unit_end: right_start + length - 1,
+        }
+    }
+
+    fn active_tile_with_hidden_gap(
+        left_start: usize,
+        right_start: usize,
+        length: usize,
+        left_active_start: usize,
+        right_active_start: usize,
+        left_unit_start: usize,
+        right_unit_start: usize,
+    ) -> ActiveTile {
+        ActiveTile {
+            tile: Tile {
+                left_start,
+                right_start,
+                length,
+            },
+            left_active_start,
+            right_active_start,
+            left_unit_start,
+            left_unit_end: left_unit_start + length - 1,
+            right_unit_start,
+            right_unit_end: right_unit_start + length - 1,
         }
     }
 
@@ -1287,6 +1441,38 @@ mod tests {
         let pair = &response.pair_results[0];
         assert_eq!(pair.similarity_score, 0.0);
         assert!(pair.matches.is_empty());
+    }
+
+    #[test]
+    fn exact_tiles_are_split_across_hidden_preprocessor_gap() {
+        let source = concat!(
+            "int first(void) { return 1; }\n",
+            "#include <stdio.h>\n",
+            "#include <stdlib.h>\n",
+            "int second(void) { return 2; }\n"
+        );
+        let left = parse_submission(AnalysisLanguage::C, source, vec![])
+            .expect("left should parse");
+        let right = parse_submission(AnalysisLanguage::C, source, vec![])
+            .expect("right should parse");
+        let mask = vec![false; left.normalized_tokens.len()];
+        let gst_result = run_gst(
+            &left.normalized_tokens,
+            &right.normalized_tokens,
+            &mask,
+            &mask,
+            3,
+        );
+
+        assert_eq!(gst_result.tiles.len(), 1);
+
+        let split_tiles = split_tiles_on_structural_gaps(&gst_result.tiles, &left, &right);
+
+        assert_eq!(split_tiles.len(), 2);
+        assert_eq!(
+            split_tiles.iter().map(|tile| tile.length).sum::<usize>(),
+            gst_result.tiles[0].length,
+        );
     }
 
     #[test]
@@ -1574,6 +1760,19 @@ mod tests {
         );
 
         assert!(regions.is_empty());
+    }
+
+    #[test]
+    fn hidden_structural_gap_prevents_cluster_merge_when_gap_is_no_longer_tiny() {
+        let cluster = build_cluster_region(
+            &[
+                active_tile_with_hidden_gap(0, 0, 6, 0, 0, 0, 0),
+                active_tile_with_hidden_gap(6, 6, 6, 10, 10, 10, 10),
+            ],
+            10,
+        );
+
+        assert!(cluster.is_none());
     }
 
     #[test]
@@ -2154,6 +2353,59 @@ mod tests {
 
         assert!(pair.similarity_score > 0.0);
         assert!(pair.matched_token_count > 0);
+    }
+
+    #[test]
+    fn cross_file_detection_is_preserved_after_file_boundary_gap_accounting() {
+        let source = "int first(void) { return 1; }\nint second(void) { return 2; }\n";
+        let second_start = source.find("int second").expect("second file should exist");
+        let source_map = vec![
+            SourceMapEntry {
+                file_path: "first.c".to_string(),
+                byte_start: 0,
+                byte_end: second_start,
+            },
+            SourceMapEntry {
+                file_path: "second.c".to_string(),
+                byte_start: second_start,
+                byte_end: source.len(),
+            },
+        ];
+        let request = AnalysisRequest {
+            schema_version: SCHEMA_VERSION.to_string(),
+            engine_version: "test".to_string(),
+            language: AnalysisLanguage::C,
+            submissions: vec![
+                AnalysisSubmission {
+                    submission_id: "left".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: source.to_string(),
+                    source_map: source_map.clone(),
+                },
+                AnalysisSubmission {
+                    submission_id: "right".to_string(),
+                    submission_kind: SubmissionKind::Current,
+                    source: source.to_string(),
+                    source_map,
+                },
+            ],
+            template: None,
+            pairs: vec![AnalysisPair {
+                pair_id: "left__right".to_string(),
+                left_submission_id: "left".to_string(),
+                right_submission_id: "right".to_string(),
+            }],
+            params: AnalysisParams {
+                gst_min_match_length: 3,
+                minimum_comment_length: 5,
+            },
+        };
+
+        let response = analyze(request).expect("analysis should succeed");
+        let pair = &response.pair_results[0];
+
+        assert!(pair.similarity_score > 0.0);
+        assert!(pair.matches.iter().any(|matched| matched.kind == engine_contracts::MatchKind::Code));
     }
 
     #[test]

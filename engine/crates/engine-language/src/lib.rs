@@ -8,6 +8,7 @@ pub struct CodeToken {
     pub byte_start: usize,
     pub byte_end: usize,
     pub node_kind: String,
+    pub unit_index: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +57,7 @@ fn parse_with_adapter(
     let tree = adapter.build_tree(source)?;
     let mut code_tokens = Vec::new();
     let mut comment_tokens = Vec::new();
+    let mut next_unit_index = 0usize;
 
     collect_tokens(
         tree.root_node(),
@@ -63,7 +65,9 @@ fn parse_with_adapter(
         adapter,
         &mut code_tokens,
         &mut comment_tokens,
+        &mut next_unit_index,
     );
+    apply_file_boundary_units(&mut code_tokens, &source_map);
 
     let normalized_tokens = code_tokens
         .iter()
@@ -85,9 +89,11 @@ fn collect_tokens(
     adapter: &dyn LanguageAdapter,
     code_tokens: &mut Vec<CodeToken>,
     comment_tokens: &mut Vec<CommentToken>,
+    next_unit_index: &mut usize,
 ) {
     let node_kind = node.kind();
     if adapter.should_skip_subtree(node_kind) {
+        *next_unit_index += count_boundary_units(node, source, adapter).max(1);
         return;
     }
 
@@ -106,7 +112,9 @@ fn collect_tokens(
             byte_start: start,
             byte_end: end,
             node_kind: node_kind.to_string(),
+            unit_index: *next_unit_index,
         });
+        *next_unit_index += 1;
         return;
     }
 
@@ -140,7 +148,9 @@ fn collect_tokens(
             byte_start: start,
             byte_end: end,
             node_kind: node_kind.to_string(),
+            unit_index: *next_unit_index,
         });
+        *next_unit_index += 1;
         return;
     }
 
@@ -152,8 +162,56 @@ fn collect_tokens(
                 adapter,
                 code_tokens,
                 comment_tokens,
+                next_unit_index,
             );
         }
+    }
+}
+
+fn count_boundary_units(node: Node, source: &str, adapter: &dyn LanguageAdapter) -> usize {
+    if node.child_count() == 0 {
+        let start = node.start_byte();
+        let end = node.end_byte();
+
+        if end <= start || end > source.len() {
+            return 0;
+        }
+
+        let raw_text = &source[start..end];
+        if raw_text.trim().is_empty() || adapter.is_comment_kind(node.kind()) {
+            return 0;
+        }
+
+        return 1;
+    }
+
+    let mut total = 0usize;
+    for index in 0..node.child_count() {
+        if let Some(child) = node.child(index) {
+            total += count_boundary_units(child, source, adapter);
+        }
+    }
+
+    total
+}
+
+fn apply_file_boundary_units(code_tokens: &mut [CodeToken], source_map: &[SourceMapEntry]) {
+    if code_tokens.is_empty() || source_map.len() < 2 {
+        return;
+    }
+
+    let boundaries = source_map
+        .windows(2)
+        .map(|entries| entries[1].byte_start)
+        .collect::<Vec<_>>();
+
+    let mut boundary_index = 0usize;
+    for token in code_tokens.iter_mut() {
+        while boundary_index < boundaries.len() && boundaries[boundary_index] <= token.byte_start {
+            boundary_index += 1;
+        }
+
+        token.unit_index += boundary_index;
     }
 }
 
@@ -364,7 +422,7 @@ fn normalize_cfamily_token(
 #[cfg(test)]
 mod tests {
     use super::parse_submission;
-    use engine_contracts::AnalysisLanguage;
+    use engine_contracts::{AnalysisLanguage, SourceMapEntry};
 
     #[test]
     fn java_string_and_char_literals_collapse_to_placeholders() {
@@ -490,5 +548,67 @@ mod tests {
         assert!(!parsed.normalized_tokens.iter().any(|token| token.starts_with("ID1")));
         assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("demo")));
         assert!(!parsed.normalized_tokens.iter().any(|token| token.contains("Item")));
+    }
+
+    #[test]
+    fn java_boilerplate_creates_non_comparable_structural_gap() {
+        let source = "class First {}\npackage demo;\nimport java.util.List;\nclass Second {}\n";
+        let parsed = parse_submission(AnalysisLanguage::Java, source, vec![])
+            .expect("Java source should parse");
+
+        let first_class_index = parsed
+            .code_tokens
+            .iter()
+            .position(|token| token.raw_text == "class")
+            .expect("first class token should exist");
+        let second_class_index = parsed
+            .code_tokens
+            .iter()
+            .rposition(|token| token.raw_text == "class")
+            .expect("second class token should exist");
+
+        let unit_gap = parsed.code_tokens[second_class_index]
+            .unit_index
+            .saturating_sub(parsed.code_tokens[first_class_index].unit_index + 3);
+
+        assert!(unit_gap >= 3);
+    }
+
+    #[test]
+    fn source_map_file_boundaries_create_structural_gap_units() {
+        let left_source = "int first(void) { return 1; }\nint second(void) { return 2; }\n";
+        let second_start = left_source.find("int second").expect("second file should exist");
+        let parsed = parse_submission(
+            AnalysisLanguage::C,
+            left_source,
+            vec![
+                SourceMapEntry {
+                    file_path: "first.c".to_string(),
+                    byte_start: 0,
+                    byte_end: second_start,
+                },
+                SourceMapEntry {
+                    file_path: "second.c".to_string(),
+                    byte_start: second_start,
+                    byte_end: left_source.len(),
+                },
+            ],
+        )
+        .expect("C source should parse");
+
+        let second_function_index = parsed
+            .code_tokens
+            .iter()
+            .position(|token| token.byte_start >= second_start)
+            .expect("second function token should exist");
+        let previous_index = second_function_index.saturating_sub(1);
+
+        let comparable_gap = second_function_index.saturating_sub(previous_index + 1);
+        let structural_gap = parsed.code_tokens[second_function_index]
+            .unit_index
+            .saturating_sub(parsed.code_tokens[previous_index].unit_index + 1);
+
+        assert_eq!(comparable_gap, 0);
+        assert!(structural_gap >= 1);
     }
 }
