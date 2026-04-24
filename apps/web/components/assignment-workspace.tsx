@@ -102,6 +102,9 @@ export function AssignmentWorkspace({
   const [trackedUploadBatchId, setTrackedUploadBatchId] = useState<string | null>(null);
   const [activePairCategory, setActivePairCategory] = useState<"current-current" | "current-historical">("current-current");
   const [showAllPairs, setShowAllPairs] = useState(false);
+  const [pairScoreMin, setPairScoreMin] = useState("");
+  const [pairScoreMax, setPairScoreMax] = useState("");
+  const [onlyPairsWithCommentMatches, setOnlyPairsWithCommentMatches] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact>(null);
   const [revealedIdentity, setRevealedIdentity] = useState<SubmissionIdentityRevealResponse | null>(null);
   const [dueDateInput, setDueDateInput] = useState("");
@@ -373,7 +376,19 @@ export function AssignmentWorkspace({
       (p.leftSubmission.kind === "historical" && p.rightSubmission.kind === "current"),
   ) ?? [];
   const visiblePairs = activePairCategory === "current-current" ? currentVsCurrentPairs : currentVsHistoricalPairs;
-  const sectionedPairs = partitionSuspiciousPairs(visiblePairs);
+  const pairScoreMinValue = parseScoreRangeInput(pairScoreMin);
+  const pairScoreMaxValue = parseScoreRangeInput(pairScoreMax);
+  const hasActivePairScoreFilter = pairScoreMinValue !== null || pairScoreMaxValue !== null;
+  const rangeFilteredPairs = visiblePairs.filter((pair) =>
+    passesScoreRangeFilter(pair.similarityScore, pairScoreMinValue, pairScoreMaxValue),
+  );
+  const commentFilteredPairs = onlyPairsWithCommentMatches
+    ? rangeFilteredPairs.filter((pair) => pair.commentMatchCount >= 1)
+    : rangeFilteredPairs;
+  const sectionedPairs = partitionSuspiciousPairs(commentFilteredPairs);
+  const filteredOutByScoreCount = visiblePairs.length - rangeFilteredPairs.length;
+  const filteredOutByCommentCount = rangeFilteredPairs.length - commentFilteredPairs.length;
+  const hasActivePairFilters = hasActivePairScoreFilter || onlyPairsWithCommentMatches;
 
   const selectedArtifactKey = selectedArtifact ? `${selectedArtifact.type}:${selectedArtifact.id}` : null;
   const selectedSubmissionId = selectedArtifact?.type === "submission" ? selectedArtifact.id : null;
@@ -392,7 +407,7 @@ export function AssignmentWorkspace({
 
   const tabs: { id: WorkspaceTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "submissions", label: "Submissions", icon: <Users size={17} />, badge: currentSubmissions.length + historicalSubmissions.length },
-    { id: "pairs", label: "Suspicious Pairs", icon: <Database size={17} />, badge: sectionedPairs.totalCount },
+    { id: "pairs", label: "Suspicious Pairs", icon: <Database size={17} />, badge: visiblePairs.length },
     { id: "uploads", label: "Uploads", icon: <Upload size={17} />, badge: assignment.uploadBatches.length },
     { id: "danger", label: "Danger Zone", icon: <AlertTriangle size={17} /> },
   ];
@@ -900,25 +915,129 @@ export function AssignmentWorkspace({
 
                 {latestVisibleRun ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)" }}>
-                        Showing {sectionedPairs.shownCount} of {sectionedPairs.totalCount} pairs
-                      </p>
-                      {sectionedPairs.hiddenPairs.length > 0 && (
-                        <button
-                          className="btn btn-outline btn-sm"
-                          onClick={() => setShowAllPairs((v) => !v)}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                        <p style={{ fontSize: "0.83rem", color: "var(--text-secondary)", margin: 0 }}>
+                          {hasActivePairFilters
+                            ? `Showing ${sectionedPairs.shownCount} of ${sectionedPairs.totalCount} filtered pairs (${visiblePairs.length} total in this category)`
+                            : `Showing ${sectionedPairs.shownCount} of ${sectionedPairs.totalCount} pairs`}
+                        </p>
+                        {hasActivePairFilters && (
+                          <p style={{ fontSize: "0.76rem", color: "var(--text-tertiary)", margin: 0 }}>
+                            {filteredOutByScoreCount > 0 && `${filteredOutByScoreCount} outside the current score range.`}
+                            {filteredOutByScoreCount > 0 && filteredOutByCommentCount > 0 ? " " : ""}
+                            {filteredOutByCommentCount > 0 && `${filteredOutByCommentCount} without comment matches.`}
+                          </p>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.45rem" }}>
+                        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "flex-end", gap: "0.5rem", flexWrap: "wrap" }}>
+                          <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                            <span>Min %</span>
+                            <input
+                              className="form-input"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              inputMode="decimal"
+                              placeholder="0"
+                              value={pairScoreMin}
+                              onChange={(e) => setPairScoreMin(e.target.value)}
+                              style={{ width: 88 }}
+                            />
+                          </label>
+                          <label style={{ display: "flex", flexDirection: "column", gap: "0.25rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                            <span>Max %</span>
+                            <input
+                              className="form-input"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="1"
+                              inputMode="decimal"
+                              placeholder="100"
+                              value={pairScoreMax}
+                              onChange={(e) => setPairScoreMax(e.target.value)}
+                              style={{ width: 88 }}
+                            />
+                          </label>
+                          <button
+                            className="btn btn-outline btn-sm"
+                            onClick={() => {
+                              setPairScoreMin("");
+                              setPairScoreMax("");
+                              setOnlyPairsWithCommentMatches(false);
+                            }}
+                            disabled={!pairScoreMin && !pairScoreMax && !onlyPairsWithCommentMatches}
+                            style={{
+                              fontWeight: 600,
+                              background: !pairScoreMin && !pairScoreMax && !onlyPairsWithCommentMatches
+                                ? "var(--bg-surface-raised)"
+                                : "var(--bg-surface)",
+                              borderColor: !pairScoreMin && !pairScoreMax && !onlyPairsWithCommentMatches
+                                ? "var(--border-subtle)"
+                                : "rgba(15,23,42,0.16)",
+                              boxShadow: !pairScoreMin && !pairScoreMax && !onlyPairsWithCommentMatches
+                                ? "none"
+                                : "0 1px 2px rgba(15,23,42,0.08)",
+                            }}
+                          >
+                            Clear
+                          </button>
+                          {sectionedPairs.hiddenPairs.length > 0 && (
+                            <button
+                              className="btn btn-outline btn-sm"
+                              onClick={() => setShowAllPairs((v) => !v)}
+                              style={{
+                                fontWeight: 600,
+                                background: "var(--bg-surface)",
+                                borderColor: "rgba(15,23,42,0.16)",
+                                boxShadow: "0 1px 2px rgba(15,23,42,0.08)",
+                              }}
+                            >
+                              {showAllPairs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                              {showAllPairs ? "Hide lower-priority" : "Show all pairs"}
+                            </button>
+                          )}
+                        </div>
+                        <label
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            fontSize: "0.78rem",
+                            color: "var(--text-secondary)",
+                            padding: "0.45rem 0.7rem",
+                            border: "1px solid var(--border-subtle)",
+                            borderRadius: "var(--radius-md)",
+                            background: "var(--bg-surface)",
+                          }}
                         >
-                          {showAllPairs ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                          {showAllPairs ? "Hide lower-priority" : "Show all pairs"}
-                        </button>
-                      )}
+                          <input
+                            type="checkbox"
+                            checked={onlyPairsWithCommentMatches}
+                            onChange={(e) => setOnlyPairsWithCommentMatches(e.target.checked)}
+                          />
+                          <span>Pairs with comment matches</span>
+                        </label>
+                      </div>
                     </div>
 
                     {visiblePairs.length === 0 ? (
                       <div className="empty-state">
                         <p style={{ fontSize: "0.875rem" }}>
                           No {activePairCategory === "current-current" ? "current vs current" : "current vs historical"} pairs in this run.
+                        </p>
+                      </div>
+                    ) : commentFilteredPairs.length === 0 ? (
+                      <div className="empty-state">
+                        <p style={{ fontSize: "0.875rem", marginBottom: "0.35rem" }}>
+                          No {activePairCategory === "current-current" ? "current vs current" : "current vs historical"} pairs match the active filters.
+                        </p>
+                        <p style={{ fontSize: "0.8rem", color: "var(--text-tertiary)" }}>
+                          Adjust the Min/Max score, turn off comment-match-only filtering, or clear the filters to see all pairs in this category again.
                         </p>
                       </div>
                     ) : (
@@ -1966,4 +2085,18 @@ function partitionSuspiciousPairs(pairs: SuspiciousPairListItem[]) {
     shownCount: codeSuspicious.length + commentSupportedLowCode.length,
     totalCount: pairs.length,
   };
+}
+
+function parseScoreRangeInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed / 100 : null;
+}
+
+function passesScoreRangeFilter(score: number, min: number | null, max: number | null) {
+  if (min !== null && score < min) return false;
+  if (max !== null && score > max) return false;
+  return true;
 }
