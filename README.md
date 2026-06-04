@@ -245,7 +245,7 @@ This was completed as a **six-person group capstone project**:
 
 | Team Member | Role / Contribution |
 | --- | --- |
-| Muhammad Nabeel Waheed | Project coordination, Agile process support, frontend development, backend development, planning, and delivery tracking |
+| Muhammad Nabeel Waheed | Project coordination, system design, technology selection, Agile facilitation, and full-stack development |
 | Thomas Neal | Testing, quality assurance, validation support, and defect reporting |
 | Ghassan Balouze | Main coding contributor across core application implementation |
 | Kevin Akpinar | Backend development and server-side implementation support |
